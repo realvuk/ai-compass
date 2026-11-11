@@ -1,470 +1,69 @@
-# Let's write a python script to generate a complete, self-contained interactive web app index.html
-# that includes all 16 questions across the 8 dimensions, live scoring, radar chart visualization (via Chart.js CDN),
-# 2D political compass projection, and archetype matching.
+// Run with: node --test   (Node 18+, no dependencies). Place next to index.html.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const vm = require('vm');
 
-html_code = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The AI Political Compass: 8-Axis Worldview Test</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --border-color: #334155;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent: #38bdf8;
-            --accent-hover: #0ea5e9;
-            --danger: #f43f5e;
-            --success: #10b981;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; padding: 2rem 1rem; }
-        .container { max-width: 900px; margin: 0 auto; }
-        header { text-align: center; margin-bottom: 2.5rem; }
-        header h1 { font-size: 2.25rem; font-weight: 800; margin-bottom: 0.5Reps; color: var(--accent); }
-        header p { color: var(--text-muted); font-size: 1.1rem; }
+// Load the pure-logic <script id="core"> block from index.html.
+const html = fs.readFileSync(__dirname + '/index.html', 'utf8');
+const core = html.match(/<script id="core">([\s\S]*?)<\/script>/)[1];
+const ctx = vm.createContext({});
+vm.runInContext(core + ';this.API = { KEYS, ITEMS, FACTIONS, MIN_SIM, scoreAxes, compass, rank };', ctx);
+const { KEYS, ITEMS, FACTIONS, MIN_SIM, scoreAxes, compass, rank } = ctx.API;
 
-        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        .dimension-group { margin-bottom: 2.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 2rem; }
-        .dimension-group:last-child { border-bottom: none; padding-bottom: 0; }
-        .dim-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem; }
-        .dim-title { font-size: 1.25rem; font-weight: 700; color: #e2e8f0; }
-        .dim-subtitle { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-        .question-box { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
-        .question-text { font-size: 0.95rem; margin-bottom: 0.75rem; color: #cbd5e1; }
+const answerAll = fn => Object.fromEntries(ITEMS.map((it, i) => ['q' + i, fn(it, i)]));
+const allScores = s => Array.from(KEYS, k => s[k].score);   // Array.from: avoids cross-realm prototype mismatch
 
-        .likert-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
-        .likert-btn { background: var(--card-bg); border: 1px solid var(--border-color); color: var(--text-muted); padding: 0.5rem; font-size: 0.8rem; border-radius: 6px; cursor: pointer; text-align: center; transition: all 0.2s; }
-        .likert-btn:hover { border-color: var(--accent); color: var(--text-main); }
-        .likert-btn.selected { background: var(--accent); color: #0f172a; border-color: var(--accent); font-weight: 700; }
+test('polarity: agreeing with high-pole items and rejecting low-pole items gives +100 everywhere', () => {
+  assert.deepEqual(allScores(scoreAxes(answerAll(([, key]) => key * 2))), Array(8).fill(100));
+  assert.deepEqual(allScores(scoreAxes(answerAll(([, key]) => key * -2))), Array(8).fill(-100));
+});
 
-        .btn-primary { display: block; width: 100%; background: var(--accent); color: #0f172a; font-size: 1.1rem; font-weight: 700; padding: 1rem; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s; margin-top: 2rem; text-align: center; }
-        .btn-primary:hover { background: var(--accent-hover); }
+test('agreeing with every item scores 0, is flagged as conflicted, and gets no archetype', () => {
+  const s = scoreAxes(answerAll(() => 2));
+  assert.deepEqual(allScores(s), Array(8).fill(0));
+  assert.ok(KEYS.every(k => s[k].conflict === 1));
+  assert.equal(rank(s).length, 0);
+});
 
-        #results-section { display: none; }
-        .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
-        @media (max-width: 768px) { .results-grid { grid-template-columns: 1.0fr; } }
+test('unanswered or unsure items are skipped, not treated as neutral', () => {
+  assert.ok(KEYS.every(k => scoreAxes({})[k].score === null));
+  const s = scoreAxes({ q0: 2, q1: null });           // q0 is D1 low-pole; q1 is "unsure"
+  assert.equal(s.D1.score, -100);
+  assert.equal(s.D1.n, 1);
+  assert.equal(s.D2.score, null);
+});
 
-        .score-bar-container { margin-bottom: 1rem; }
-        .score-bar-label { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.25rem; }
-        .score-bar-track { background: var(--border-color); height: 10px; border-radius: 5px; position: relative; overflow: hidden; }
-        .score-bar-fill { height: 100%; background: var(--accent); width: 50%; transition: width 0.5s; }
+test('D4 and D5 do not move the compass', () => {
+  const base = answerAll(() => 0);
+  const moved = { ...base };
+  ITEMS.forEach(([ax], i) => { if (ax === 'D4' || ax === 'D5') moved['q' + i] = 2; });
+  const get = r => compass(k => scoreAxes(r)[k].score);
+  assert.deepEqual(get(moved), get(base));
+});
 
-        .compass-plot { width: 100%; height: 350px; background: rgba(15,23,42,0.8); border: 1px solid var(--border-color); border-radius: 8px; position: relative; display: flex; justify-content: center; align-items: center; }
-        .compass-axis-h { position: absolute; width: 100%; height: 1px; background: var(--border-color); }
-        .compass-axis-v { position: absolute; height: 100%; width: 1px; background: var(--border-color); }
-        .user-dot { position: absolute; width: 16px; height: 16px; background: var(--danger); border: 2px solid white; border-radius: 50%; transform: translate(-50%, -50%); z-index: 10; box-shadow: 0 0 10px var(--danger); }
-        .faction-dot { position: absolute; width: 10px; height: 10px; background: var(--accent); border-radius: 50%; transform: translate(-50%, -50%); opacity: 0.7; }
+test('each archetype, snapped to the achievable 25-point lattice, matches itself', () => {
+  for (const f of FACTIONS) {
+    const resp = {};
+    KEYS.forEach((ax, j) => {
+      const d = Math.round(f.d[j] / 25);                // wanted b - a, in -4..4
+      const b = Math.max(-2, Math.min(2, d)), a = b - d;
+      ITEMS.forEach(([iax, key], i) => { if (iax === ax) resp['q' + i] = key === 1 ? b : a; });
+    });
+    assert.equal(rank(scoreAxes(resp))[0].name, f.name);
+  }
+});
 
-        .faction-match-card { background: rgba(15,23,42,0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-top: 1rem; }
-        .match-header { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem; }
+test('random respondents are not funneled to one archetype (largest share under 25%)', () => {
+  let seed = 12345;                                      // mulberry32, fixed seed
+  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const wins = {}; let n = 0;
+  for (let r = 0; r < 20000; r++) {
+    const top = rank(scoreAxes(answerAll(() => Math.floor(rnd() * 5) - 2)))[0];
+    if (top) { wins[top.name] = (wins[top.name] || 0) + 1; n++; }
+  }
+  assert.ok(Math.max(...Object.values(wins)) / n < 0.25, JSON.stringify(wins));
+});
 
-        .footer { text-align: center; margin-top: 3rem; color: var(--text-muted); font-size: 0.85rem; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>The AI Political Compass</h1>
-            <p>An 8-axis psychometric instrument mapping your exact worldview across compute sovereignty, cognitive architecture, and post-labor economics.</p>
-        </header>
-
-        <div id="quiz-section" class="card">
-            <form id="compass-form">
-                <!-- Dimension 1 -->
-                <div class="dimension-group" data-dim="D1">
-                    <div class="dim-header">
-                        <span class="dim-title">1. Ontological Risk</span>
-                        <span class="dim-subtitle">Opt: Tool vs Doomer</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> Concerns about AI wiping out humanity distract us from solving real, immediate problems like disease and energy scarcity.</div>
-                        <div class="likert-options" data-qid="D1_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> Building superintelligence before we have a mathematical proof of alignment is playing Russian roulette with human survival.</div>
-                        <div class="likert-options" data-qid="D1_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 2 -->
-                <div class="dimension-group" data-dim="D2">
-                    <div class="dim-header">
-                        <span class="dim-title">2. Development Velocity</span>
-                        <span class="dim-subtitle">Opt: e/acc vs Safety Brake</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> Delays and pauses in AI development cause more measurable harm to human progress than the hypothetical risks of moving fast.</div>
-                        <div class="likert-options" data-qid="D2_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> Governments should have the statutory authority to halt frontier training runs that exceed safety and capability thresholds.</div>
-                        <div class="likert-options" data-qid="D2_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 3 -->
-                <div class="dimension-group" data-dim="D3">
-                    <div class="dim-header">
-                        <span class="dim-title">3. Control Topology</span>
-                        <span class="dim-subtitle">Opt: Open Source vs Gatekept API</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> Concentrating frontier AI behind a handful of closed corporate APIs is a greater danger to society than bad actors misusing open weights.</div>
-                        <div class="likert-options" data-qid="D3_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> Releasing the raw weights of frontier models is irreversible proliferation and should be restricted like enriched uranium.</div>
-                        <div class="likert-options" data-qid="D3_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 4 -->
-                <div class="dimension-group" data-dim="D4">
-                    <div class="dim-header">
-                        <span class="dim-title">4. Geopolitical Posture</span>
-                        <span class="dim-subtitle">Opt: Doves vs Hawks</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> Lethal autonomous weapons that select and engage targets without human intervention must be banned by international treaty.</div>
-                        <div class="likert-options" data-qid="D4_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> Refusing to build military AI guarantees defeat against authoritarian adversaries who will deploy autonomous weapons regardless of treaties.</div>
-                        <div class="likert-options" data-qid="D4_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 5 -->
-                <div class="dimension-group" data-dim="D5">
-                    <div class="dim-header">
-                        <span class="dim-title">5. Economic Integration</span>
-                        <span class="dim-subtitle">Opt: Augmentation vs Labor Replacement</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> AI will predominantly act as a cognitive amplifier that creates more high-value human jobs than it eliminates.</div>
-                        <div class="likert-options" data-qid="D5_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> Most white-collar knowledge work will be permanently replaced—not merely assisted—by autonomous AI agents within a decade.</div>
-                        <div class="likert-options" data-qid="D5_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 6 -->
-                <div class="dimension-group" data-dim="D6">
-                    <div class="dim-header">
-                        <span class="dim-title">6. Compute Sovereignty</span>
-                        <span class="dim-subtitle">Opt: Edge/Distributed vs Mega-Cluster</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> True AI freedom requires compressing models to run locally on personal and edge hardware rather than renting intelligence from cloud utilities.</div>
-                        <div class="likert-options" data-qid="D6_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> Frontier intelligence requires gigawatt-scale data centers that only a few global hyperscalers or superpower states can build and secure.</div>
-                        <div class="likert-options" data-qid="D6_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 7 -->
-                <div class="dimension-group" data-dim="D7">
-                    <div class="dim-header">
-                        <span class="dim-title">7. Cognitive Architecture</span>
-                        <span class="dim-subtitle">Opt: World Models vs Scaling Maximalism</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> Scaling autoregressive language models will hit a hard ceiling without fundamentally new architectures built on causal world models and symbolic reasoning.</div>
-                        <div class="likert-options" data-qid="D7_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> The Bitter Lesson holds: scaling compute, data, and reinforcement learning on general sequence models is all we need to reach superintelligence.</div>
-                        <div class="likert-options" data-qid="D7_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Dimension 8 -->
-                <div class="dimension-group" data-dim="D8">
-                    <div class="dim-header">
-                        <span class="dim-title">8. Post-Labor Distribution</span>
-                        <span class="dim-subtitle">Opt: Redistribution vs Capital Capture</span>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(A)</strong> Because AI is trained on the collective commons of human knowledge, its economic surplus must fund universal dividends or data royalties.</div>
-                        <div class="likert-options" data-qid="D8_A">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                    <div class="question-box">
-                        <div class="question-text"><strong>(B)</strong> The organizations that risk billions on compute and R&D rightfully own the economic output of their models without mandatory wealth redistribution.</div>
-                        <div class="likert-options" data-qid="D8_B">
-                            <button type="button" class="likert-btn" data-val="-2">Strongly Disagree</button>
-                            <button type="button" class="likert-btn" data-val="-1">Disagree</button>
-                            <button type="button" class="likert-btn selected" data-val="0">Neutral</button>
-                            <button type="button" class="likert-btn" data-val="1">Agree</button>
-                            <button type="button" class="likert-btn" data-val="2">Strongly Agree</button>
-                        </div>
-                    </div>
-                </div>
-
-                <button type="button" id="submit-btn" class="btn-primary">Calculate My AI Worldview</button>
-            </form>
-        </div>
-
-        <div id="results-section" class="card">
-            <h2 style="font-size: 1.75rem; margin-bottom: 1.5rem; color: var(--accent); text-align: center;">Your AI Worldview Profile</h2>
-
-            <div class="results-grid">
-                <div>
-                    <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">8-Axis Score Breakdown (-100 to +100)</h3>
-                    <div id="score-bars"></div>
-                </div>
-                <div>
-                    <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Macro 2D Compass Position</h3>
-                    <div class="compass-plot" id="compass-plot">
-                        <div class="compass-axis-h"></div>
-                        <div class="compass-axis-v"></div>
-                        <div id="user-dot" class="user-dot" title="You"></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
-                        <span>← Distributed Commons</span>
-                        <span>Concentrated Oligopoly →</span>
-                    </div>
-
-                    <div class="faction-match-card">
-                        <div class="match-header" id="closest-faction-title">Closest Faction Match: Analyzing...</div>
-                        <p id="closest-faction-desc" style="font-size: 0.9rem; color: var(--text-muted);">Calculating euclidean distance across all 8 dimensions...</p>
-                    </div>
-                </div>
-            </div>
-
-            <button type="button" id="retake-btn" class="btn-primary" style="background: transparent; border: 1px solid var(--accent); color: var(--accent);">Retake Test</button>
-        </div>
-
-        <div class="footer">
-            The AI Political Compass • Built for researchers, engineers, and builders.
-        </div>
-    </div>
-
-    <script>
-        // State for responses
-        const responses = {};
-        const qids = ['D1_A','D1_B','D2_A','D2_B','D3_A','D3_B','D4_A','D4_B','D5_A','D5_B','D6_A','D6_B','D7_A','D7_B','D8_A','D8_B'];
-        qids.forEach(q => responses[q] = 0);
-
-        // Faction reference library for matching
-        const factions = [
-            { name: "Decentralized Cypherpunk", d: [-70, -90, -100, -60, -60, -100, -40, -50], desc: "Builds local edge-run open models to prevent corporate oligopolies and state surveillance monopolies." },
-            { name: "Open-Science Architect (LeCun style)", d: [-85, -80, -95, -30, -85, -60, -95, -20], desc: "Open-weight commoditization of AI as a universal human amplifier, rejecting existential doom narratives." },
-            { name: "Techno-Capital e/acc (Andreessen)", d: [-100, -100, -40, 85, -30, 60, 80, 95], desc: "Unrestricted technological acceleration and defense dominance with zero regulatory friction." },
-            { name: "Hyperscaler Utility (Altman style)", d: [-65, -60, 80, 50, 45, 95, 90, -30], desc: "Centralized frontier utility: rapid scaling behind closed APIs paired with sovereign infrastructure alliances." },
-            { name: "Frontier Safety Gatekeeper (Amodei)", d: [40, 35, 75, 65, 75, 85, 75, -25], desc: "Safety-governed frontier gatekeeping paired with democratic defense superiority and candid preparation for white-collar displacement." },
-            { name: "Sovereign Defense Industrialist", d: [-20, -75, 90, 100, 60, 90, 20, 40], desc: "Views AI as 21st-century steel and electricity—an industrial base that must be vertically integrated for national security." },
-            { name: "Precautionary Institutionalist (Bengio)", d: [65, 75, 50, -85, 50, 20, -50, -80], desc: "Statutory safety guardrails, multilateral non-proliferation treaties, and strict governance before scaling further." },
-            { name: "Hard Existential Doomer (Yudkowsky)", d: [100, 100, 100, 20, 90, 80, 60, 0], desc: "Total international moratorium on frontier compute clusters to prevent human extinction from unaligned superintelligence." }
-        ];
-
-        const dimNames = {
-            'D1': 'Ontological Risk',
-            'D2': 'Development Velocity',
-            'D3': 'Control Topology',
-            'D4': 'Geopolitical Posture',
-            'D5': 'Economic Integration',
-            'D6': 'Compute Sovereignty',
-            'D7': 'Cognitive Architecture',
-            'D8': 'Post-Labor Distribution'
-        };
-
-        // Handle Likert button clicks
-        document.querySelectorAll('.likert-options').forEach(container => {
-            const qid = container.dataset.qid;
-            container.querySelectorAll('.likert-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    container.querySelectorAll('.likert-btn').forEach(b => b.classList.remove('selected'));
-                    btn.classList.add('selected');
-                    responses[qid] = parseInt(btn.dataset.val);
-                });
-            });
-        });
-
-        document.getElementById('submit-btn').addEventListener('click', () => {
-            calculateResults();
-        });
-
-        document.getElementById('retake-btn').addEventListener('click', () => {
-            document.getElementById('results-section').style.display = 'none';
-            document.getElementById('quiz-section').style.display = 'block';
-            window.scrollTo({top: 0, behavior: 'smooth'});
-        });
-
-        function calculateResults() {
-            const scores = {};
-            const dims = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
-
-            dims.forEach(dim => {
-                const a = responses[dim + '_A']; // Keyed to Pole A (-1)
-                const b = responses[dim + '_B']; // Keyed to Pole B (+1)
-                // Formula: ((b - a) / 4) * 100
-                scores[dim] = Math.round(((b - a) / 4) * 100);
-            });
-
-            // Render score bars
-            const barsContainer = document.getElementById('score-bars');
-            barsContainer.innerHTML = '';
-            dims.forEach(dim => {
-                const val = scores[dim]; // -100 to 100
-                // convert to percentage 0 to 100 for width
-                const pct = (val + 100) / 2;
-                const html = `
-                    <div class="score-bar-container">
-                        <div class="score-bar-label">
-                            <span><strong>${dimNames[dim]}</strong></span>
-                            <span>${val > 0 ? '+' + val : val}</span>
-                        </div>
-                        <div class="score-bar-track">
-                            <div class="score-bar-fill" style="width: ${pct}%;"></div>
-                        </div>
-                    </div>
-                `;
-                barsContainer.innerHTML += html;
-            });
-
-            // Macro coordinates calculation
-            // X (Concentration) = mean of D3, D5, D6, D8
-            const X = (scores['D3'] + scores['D5'] + scores['D6'] + scores['D8']) / 4;
-            // Y (Control) = mean of D1, D2, D4
-            const Y = (scores['D1'] + scores['D2'] + scores['D4']) / 3;
-
-            // Plot user dot on compass (plot is -100 to 100 mapped to 0% to 100%)
-            const plotX = ((X + 100) / 200) * 100;
-            const plotY = 100 - ((Y + 100) / 200) * 100; // inverted for CSS top
-
-            const userDot = document.getElementById('user-dot');
-            userDot.style.left = plotX + '%';
-            userDot.style.top = plotY + '%';
-
-            // Find closest faction match (Euclidean distance)
-            let closestFaction = factions[0];
-            let minDistance = Infinity;
-
-            factions.forEach(f => {
-                let dist = 0;
-                dims.forEach((d, idx) => {
-                    dist += Math.pow(scores[d] - f.d[idx], 2);
-                });
-                dist = Math.sqrt(dist);
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    closestFaction = f;
-                }
-            });
-
-            document.getElementById('closest-faction-title').innerText = `Closest Faction Match: ${closestFaction.name}`;
-            document.getElementById('closest-faction-desc').innerText = closestFaction.desc;
-
-            // Switch views
-            document.getElementById('quiz-section').style.display = 'none';
-            document.getElementById('results-section').style.display = 'block';
-            window.scrollTo({top: 0, behavior: 'smooth'});
-        }
-    </script>
-</body>
-</html>
-"""
-
-with open("index.html", "w", encoding="utf-8") as f:
-    f.write(html_code)
-
-print("Successfully generated index.html")
+test('MIN_SIM is a sane threshold', () => assert.ok(MIN_SIM > 0 && MIN_SIM < 1));
