@@ -27,6 +27,7 @@
   --on-accent: #FFFFFF;
   --accent-wash: #F4DCE9;
   --friend: #2A78D6;
+  --ijs-logo-filter: none;
   --display: "Archivo", "Arial Narrow", Arial, sans-serif;
   --body: "Newsreader", Georgia, "Times New Roman", serif;
   color-scheme: light;
@@ -36,6 +37,7 @@
     --paper: #0B1620; --surface: #122230; --sea: #15303F; --island: #453F22;
     --ink: #E5EDF0; --ink-2: #AEBCC6; --muted: #8C9AA5; --rule: #2C4050;
     --accent: #E0559F; --on-accent: #1A0A13; --accent-wash: #44203A; --friend: #4C8DE8;
+    --ijs-logo-filter: brightness(0) invert(1);
     color-scheme: dark;
   }
 }
@@ -43,6 +45,7 @@
   --paper: #0B1620; --surface: #122230; --sea: #15303F; --island: #453F22;
   --ink: #E5EDF0; --ink-2: #AEBCC6; --muted: #8C9AA5; --rule: #2C4050;
   --accent: #E0559F; --on-accent: #1A0A13; --accent-wash: #44203A; --friend: #4C8DE8;
+  --ijs-logo-filter: brightness(0) invert(1);
   color-scheme: dark;
 }
 
@@ -226,6 +229,16 @@ thead th { font-weight: 700; border-bottom: 1.5px solid var(--ink); vertical-ali
 footer { margin-top: 72px; padding: 20px 0 48px; border-top: 1.5px solid var(--ink); }
 footer p { max-width: 72ch; font: 500 14.5px/1.5 var(--display); font-stretch: 88%; color: var(--muted); }
 footer p + p { margin-top: 8px; }
+.footer-contact-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 24px 32px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--rule); }
+.footer-logos { display: flex; align-items: center; gap: 28px; }
+.footer-logos img { display: block; height: auto; }
+.footer-logos .ijs-logo { filter: var(--ijs-logo-filter); }
+.footer-institute { display: inline-flex; align-items: center; gap: 12px;
+  font: 700 15px/1.2 var(--display); font-stretch: 88%; }
+.footer-contact { font-style: normal; font: 500 15px/1.5 var(--display); font-stretch: 88%; }
+.footer-contact span { display: block; margin-bottom: 4px; color: var(--muted); font-size: 13px; }
+.footer-contact a:hover { color: var(--accent); }
 
 /* ---------- chart ---------- */
 .c-sea { fill: var(--sea); }
@@ -1218,7 +1231,16 @@ function footer() {
     h('p', null, 'Eight axes, 48 statements, eleven reference camps. The starting point was Kristin Houser’s ',
       h('a', { href: 'https://bigthinkmedia.substack.com/p/10-perspectives-that-divide-the-ai', target: '_blank', rel: 'noopener noreferrer', text: '“10 perspectives that divide the AI world”' }),
       ' in Big Think, reworked from ten tribes into eight independent axes.'),
-    h('p', { text: 'Nothing you enter is sent anywhere. Answers are kept in this browser, and a code only travels when you send it yourself.' }));
+    h('p', { text: 'Nothing you enter is sent anywhere. Answers are kept in this browser, and a code only travels when you send it yourself.' }),
+    h('div', { class: 'footer-contact-row' },
+      h('div', { class: 'footer-logos' },
+        h('img', { src: 'Datavysts_Icon_Burple_RGB.svg', alt: 'Datavysts', width: '48', height: '48' }),
+        h('div', { class: 'footer-institute' },
+          h('img', { class: 'ijs-logo', src: 'IJSbrezBesedila.svg', alt: 'IJS', width: '36', height: '48' }),
+          h('span', null, 'Jožef Stefan', h('br'), 'Institute'))),
+      h('address', { class: 'footer-contact' },
+        h('span', { text: 'Contact' }),
+        h('a', { href: 'mailto:vuk.dinic@ijs.si', text: 'vuk.dinic@ijs.si' }))));
 }
 
 function render(focus) {
