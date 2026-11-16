@@ -1,69 +1,1254 @@
-// Run with: node --test   (Node 18+, no dependencies). Place next to index.html.
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const vm = require('vm');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Compass</title>
+<meta name="description" content="Rate 48 statements and see where you stand on the eight questions that divide the AI world, then compare with friends.">
+<meta property="og:title" content="AI Compass">
+<meta property="og:description" content="Where do you stand on AI? Eight axes, 48 statements, eleven camps.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='12' fill='%23fff' stroke='%23B3206F' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='4.5' fill='%23B3206F'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&amp;family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&amp;display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Layout idea: a navigation chart. One left-aligned column; the chart is the only loud
+     object, drawn in magenta overprint on quiet chart paper. The middle ground is an island. */
+  --paper: #F2F5F4;
+  --surface: #FBFCFC;
+  --sea: #DCE9EE;
+  --island: #EFE3B9;
+  --ink: #12243A;
+  --ink-2: #44566A;
+  --muted: #627080;
+  --rule: #C4CFD4;
+  --accent: #B3206F;
+  --on-accent: #FFFFFF;
+  --accent-wash: #F4DCE9;
+  --friend: #2A78D6;
+  --display: "Archivo", "Arial Narrow", Arial, sans-serif;
+  --body: "Newsreader", Georgia, "Times New Roman", serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0B1620; --surface: #122230; --sea: #15303F; --island: #453F22;
+    --ink: #E5EDF0; --ink-2: #AEBCC6; --muted: #8C9AA5; --rule: #2C4050;
+    --accent: #E0559F; --on-accent: #1A0A13; --accent-wash: #44203A; --friend: #4C8DE8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0B1620; --surface: #122230; --sea: #15303F; --island: #453F22;
+  --ink: #E5EDF0; --ink-2: #AEBCC6; --muted: #8C9AA5; --rule: #2C4050;
+  --accent: #E0559F; --on-accent: #1A0A13; --accent-wash: #44203A; --friend: #4C8DE8;
+  color-scheme: dark;
+}
 
-// Load the pure-logic <script id="core"> block from index.html.
-const html = fs.readFileSync(__dirname + '/index.html', 'utf8');
-const core = html.match(/<script id="core">([\s\S]*?)<\/script>/)[1];
-const ctx = vm.createContext({});
-vm.runInContext(core + ';this.API = { KEYS, ITEMS, FACTIONS, MIN_SIM, scoreAxes, compass, rank };', ctx);
-const { KEYS, ITEMS, FACTIONS, MIN_SIM, scoreAxes, compass, rank } = ctx.API;
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 18px/1.55 var(--body); font-optical-sizing: auto;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 44px); }
+p { margin: 0; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+.statement:focus, .camp-name:focus { outline: none; }
+.ui { font-family: var(--display); font-stretch: 88%; }
 
-const answerAll = fn => Object.fromEntries(ITEMS.map((it, i) => ['q' + i, fn(it, i)]));
-const allScores = s => Array.from(KEYS, k => s[k].score);   // Array.from: avoids cross-realm prototype mismatch
+/* ---------- top bar ---------- */
+.top { display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 14px 0; border-bottom: 1.5px solid var(--ink); }
+.brand { display: inline-flex; align-items: center; gap: 9px; padding: 4px 2px; border: 0; background: none;
+  color: var(--ink); cursor: pointer; font: 800 21px/1 var(--display); font-stretch: 76%; letter-spacing: .01em; }
+.brand { white-space: nowrap; }
+.brand svg { display: block; }
+.top-right { display: flex; align-items: center; gap: 14px; font: 500 15px/1.2 var(--display); font-stretch: 88%; color: var(--ink-2); }
 
-test('polarity: agreeing with high-pole items and rejecting low-pole items gives +100 everywhere', () => {
-  assert.deepEqual(allScores(scoreAxes(answerAll(([, key]) => key * 2))), Array(8).fill(100));
-  assert.deepEqual(allScores(scoreAxes(answerAll(([, key]) => key * -2))), Array(8).fill(-100));
-});
+/* ---------- buttons ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 10px 20px;
+  border: 1.5px solid var(--ink); border-radius: 3px; background: transparent; color: var(--ink); cursor: pointer;
+  font: 700 17px/1.15 var(--display); font-stretch: 88%; text-align: center; }
+.btn:hover { background: var(--accent-wash); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.quiet { min-height: 36px; padding: 6px 2px; border-color: transparent; background: none; font-weight: 600; font-size: 15px;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--muted); }
+.btn.quiet:hover { text-decoration-color: var(--accent); }
+.btn.small { min-height: 34px; padding: 5px 12px; font-size: 14px; font-weight: 600; }
+.btn[disabled] { opacity: .4; cursor: default; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
 
-test('agreeing with every item scores 0, is flagged as conflicted, and gets no archetype', () => {
-  const s = scoreAxes(answerAll(() => 2));
-  assert.deepEqual(allScores(s), Array(8).fill(0));
-  assert.ok(KEYS.every(k => s[k].conflict === 1));
-  assert.equal(rank(s).length, 0);
-});
+/* ---------- intro ---------- */
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 32px 56px; align-items: center; padding: 48px 0 16px; }
+.hero h1, .camp-name { margin: 0; font: 800 clamp(46px, 7.4vw, 92px)/.9 var(--display); font-stretch: 66%;
+  letter-spacing: -.012em; text-wrap: balance; }
+.lede { margin-top: 22px; max-width: 30em; font-size: 20px; line-height: 1.45; color: var(--ink-2); }
+.hero .row { margin-top: 28px; }
+.fine { margin-top: 14px; font: 500 15px/1.4 var(--display); font-stretch: 88%; color: var(--muted); max-width: 34em; }
+.notice { margin-top: 24px; padding: 14px 16px; border-left: 4px solid var(--friend); background: var(--surface);
+  font: 500 16px/1.4 var(--display); font-stretch: 88%; }
+.chart figure, figure.chart { margin: 0; }
+.compass { width: 100%; }
+.compass svg { display: block; max-width: 100%; height: auto; }
+figcaption { margin-top: 10px; font: 500 14.5px/1.4 var(--display); font-stretch: 88%; color: var(--muted); max-width: 46em; }
 
-test('unanswered or unsure items are skipped, not treated as neutral', () => {
-  assert.ok(KEYS.every(k => scoreAxes({})[k].score === null));
-  const s = scoreAxes({ q0: 2, q1: null });           // q0 is D1 low-pole; q1 is "unsure"
-  assert.equal(s.D1.score, -100);
-  assert.equal(s.D1.n, 1);
-  assert.equal(s.D2.score, null);
-});
+h2 { margin: 0 0 20px; padding-top: 14px; border-top: 1.5px solid var(--ink);
+  font: 700 28px/1.1 var(--display); font-stretch: 76%; text-wrap: balance; }
+section { margin-top: 56px; }
+.axes-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 56px; margin: 0; padding: 0; list-style: none; }
+.axes-list h3 { margin: 0 0 4px; font: 700 19px/1.2 var(--display); font-stretch: 80%; }
+.axes-list p { color: var(--ink-2); line-height: 1.4; }
+.versus { display: flex; align-items: center; gap: 10px; margin-top: 8px; font: 600 14.5px/1.2 var(--display); font-stretch: 88%; }
+.versus i { flex: 1; min-width: 20px; max-width: 90px; height: 1.5px; background: var(--ink-2); }
 
-test('D4 and D5 do not move the compass', () => {
-  const base = answerAll(() => 0);
-  const moved = { ...base };
-  ITEMS.forEach(([ax], i) => { if (ax === 'D4' || ax === 'D5') moved['q' + i] = 2; });
-  const get = r => compass(k => scoreAxes(r)[k].score);
-  assert.deepEqual(get(moved), get(base));
-});
+/* ---------- quiz ---------- */
+.quiz { max-width: 860px; padding: 28px 0 56px; }
+.ticks { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+.ticks i { flex: 1; height: 6px; background: var(--rule); }
+.ticks i.gate { height: 11px; }
+.ticks i.done { background: var(--ink-2); }
+.ticks i.skip { background: var(--muted); height: 3px; }
+.ticks i.now { background: var(--accent); height: 16px; }
+.count { margin-top: 10px; display: flex; justify-content: space-between; gap: 16px;
+  font: 500 15px/1.3 var(--display); font-stretch: 88%; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.statement { margin: 34px 0 30px; max-width: 21em; min-height: 3.6em; font: 500 clamp(25px, 3.7vw, 37px)/1.17 var(--body);
+  letter-spacing: -.006em; text-wrap: balance; }
+.likert { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.likert button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  min-height: 72px; padding: 10px 6px; border: 1.5px solid var(--ink); border-radius: 3px; background: var(--surface);
+  color: var(--ink); cursor: pointer; font: 600 16px/1.12 var(--display); font-stretch: 84%; text-align: center; }
+.likert button:hover { background: var(--accent-wash); }
+.likert button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.likert kbd { font: 500 12px/1 var(--display); color: var(--muted); }
+.likert button[aria-pressed="true"] kbd { color: inherit; opacity: .8; }
+.under { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 24px; margin-top: 12px; }
+details.note { max-width: 34em; }
+summary { cursor: pointer; font: 600 15px/1.3 var(--display); font-stretch: 88%; padding: 8px 0; color: var(--ink-2); }
+summary:hover { color: var(--ink); }
+details.note p { padding: 2px 0 8px; font-size: 17px; line-height: 1.45; color: var(--ink-2); }
+.quiz-nav { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;
+  margin-top: 36px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.keys { margin-top: 18px; font: 500 14px/1.4 var(--display); font-stretch: 88%; color: var(--muted); }
+@media (hover: none), (pointer: coarse) { .likert kbd, .keys { display: none; } }
 
-test('each archetype, snapped to the achievable 25-point lattice, matches itself', () => {
-  for (const f of FACTIONS) {
-    const resp = {};
-    KEYS.forEach((ax, j) => {
-      const d = Math.round(f.d[j] / 25);                // wanted b - a, in -4..4
-      const b = Math.max(-2, Math.min(2, d)), a = b - d;
-      ITEMS.forEach(([iax, key], i) => { if (iax === ax) resp['q' + i] = key === 1 ? b : a; });
+/* ---------- result ---------- */
+.result-head { padding: 44px 0 0; }
+.kicker { font: 600 17px/1.2 var(--display); font-stretch: 88%; color: var(--ink-2); margin-bottom: 10px; }
+.camp-name { font-size: clamp(42px, 6.6vw, 80px); }
+.match { margin-top: 16px; font: 700 20px/1.2 var(--display); font-stretch: 84%; }
+.match span { font-weight: 500; color: var(--ink-2); }
+.creed { margin-top: 18px; font: italic 500 26px/1.25 var(--body); max-width: 24em; text-wrap: balance; }
+.about { margin-top: 14px; max-width: 62ch; }
+.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 18px; margin: 20px 0 0; max-width: 70ch; }
+.facts dt { font: 600 15px/1.6 var(--display); font-stretch: 88%; color: var(--ink-2); }
+.facts dd { margin: 0; font-size: 17px; line-height: 1.45; }
+.partial { margin-top: 24px; padding: 14px 16px; border-left: 4px solid var(--accent); background: var(--surface);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; font: 500 16px/1.4 var(--display); font-stretch: 88%; }
+
+.position { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 4fr); gap: 28px 48px; align-items: start; }
+.reading p + p { margin-top: 12px; }
+.reading .big { font: 500 22px/1.3 var(--body); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 18px 0 0; padding: 0; list-style: none;
+  font: 500 14.5px/1.2 var(--display); font-stretch: 88%; color: var(--ink-2); }
+.legend li { display: inline-flex; align-items: center; gap: 7px; }
+.legend svg { display: block; }
+
+.axis { padding: 18px 0 14px; border-bottom: 1px solid var(--rule); }
+.axis:first-of-type { padding-top: 0; }
+.axis-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+.axis-head h3 { margin: 0; font: 700 21px/1.2 var(--display); font-stretch: 78%; }
+.axis-head p { color: var(--ink-2); font-size: 17px; line-height: 1.35; }
+.scale { display: grid; grid-template-columns: minmax(110px, 200px) minmax(0, 1fr) minmax(110px, 200px); gap: 14px; align-items: center; margin-top: 10px; }
+.pole { font: 500 15px/1.15 var(--display); font-stretch: 86%; color: var(--muted); }
+.pole.a { text-align: right; }
+.pole.on { color: var(--ink); font-weight: 700; }
+.track { position: relative; height: 30px; }
+.track .zone { position: absolute; left: 37.5%; width: 25%; top: 7px; height: 16px; background: var(--island); border-radius: 2px; }
+.track .line { position: absolute; left: 0; right: 0; top: 14.5px; height: 1px; background: var(--ink-2); }
+.track .end { position: absolute; top: 9px; width: 1px; height: 12px; background: var(--ink-2); }
+.track .mid { position: absolute; left: 50%; top: 3px; width: 1.5px; height: 24px; margin-left: -.75px; background: var(--ink); }
+.track .fill { position: absolute; top: 10px; height: 10px; background: var(--accent); }
+.track .fill.neg { border-radius: 5px 0 0 5px; }
+.track .fill.pos { border-radius: 0 5px 5px 0; }
+.track .fr { position: absolute; top: 3px; width: 24px; height: 24px; margin-left: -12px; padding: 0; border: 0; background: none; cursor: help; }
+.track .fr::before { content: ""; position: absolute; left: 6.5px; top: 6.5px; width: 11px; height: 11px; transform: rotate(45deg);
+  background: var(--friend); box-shadow: 0 0 0 2px var(--surface); }
+.read { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: 8px; }
+.read b { font: 700 17px/1.3 var(--display); font-stretch: 86%; }
+.read .num { font: 500 15px/1.3 var(--display); font-stretch: 88%; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chip { display: inline-block; padding: 2px 9px; border: 1px solid var(--ink-2); border-radius: 999px;
+  font: 600 13px/1.4 var(--display); font-stretch: 88%; color: var(--ink-2); cursor: help; }
+.axis details { margin-top: 4px; }
+.defs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 28px; margin: 6px 0 16px; }
+.defs h4, .answers h4 { margin: 0 0 3px; font: 700 15px/1.25 var(--display); font-stretch: 86%; }
+.defs p { font-size: 16px; line-height: 1.4; color: var(--ink-2); }
+.answers { margin: 0; padding: 0; list-style: none; max-width: 70ch; }
+.answers li { padding: 9px 0; border-top: 1px solid var(--rule); }
+.answers .st { font-size: 17px; line-height: 1.4; }
+.answers .an { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin-top: 2px;
+  font: 500 14.5px/1.4 var(--display); font-stretch: 88%; color: var(--ink-2); }
+.answers .an b { color: var(--ink); font-weight: 700; }
+
+.share { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 48px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field label { font: 600 15px/1.3 var(--display); font-stretch: 88%; }
+.field .row { gap: 8px; }
+input[type="text"] { width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--ink-2); border-radius: 3px;
+  background: var(--surface); color: var(--ink); font: 500 16px/1.2 var(--display); font-stretch: 92%; letter-spacing: .02em; }
+.row input[type="text"] { flex: 1 1 200px; width: auto; }
+.hint { font: 500 14px/1.4 var(--display); font-stretch: 88%; color: var(--muted); }
+.err { font: 600 15px/1.4 var(--display); font-stretch: 88%; color: var(--accent); min-height: 1.4em; }
+.friends { margin: 0; padding: 0; list-style: none; }
+.friends li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; padding: 12px 0; border-top: 1px solid var(--rule); }
+.friends .who { font: 700 18px/1.2 var(--display); font-stretch: 84%; display: inline-flex; align-items: center; gap: 8px; }
+.friends .who::before { content: ""; width: 9px; height: 9px; transform: rotate(45deg); background: var(--friend); }
+.friends .how { flex: 1 1 240px; font-size: 16px; line-height: 1.35; color: var(--ink-2); }
+.tbl { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; font: 500 14.5px/1.3 var(--display); font-stretch: 88%; font-variant-numeric: tabular-nums; min-width: 100%; }
+th, td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 150px; }
+thead th { font-weight: 700; border-bottom: 1.5px solid var(--ink); vertical-align: bottom; }
+.method p, .method li { max-width: 68ch; font-size: 17px; line-height: 1.5; color: var(--ink-2); }
+.method p + p { margin-top: 10px; }
+.method summary { font-size: 17px; color: var(--ink); }
+.ranked { margin: 8px 0 0; padding: 0; list-style: none; max-width: 560px; }
+.ranked li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-top: 1px solid var(--rule);
+  font: 500 16px/1.3 var(--display); font-stretch: 88%; font-variant-numeric: tabular-nums; }
+
+footer { margin-top: 72px; padding: 20px 0 48px; border-top: 1.5px solid var(--ink); }
+footer p { max-width: 72ch; font: 500 14.5px/1.5 var(--display); font-stretch: 88%; color: var(--muted); }
+footer p + p { margin-top: 8px; }
+
+/* ---------- chart ---------- */
+.c-sea { fill: var(--sea); }
+.c-island { fill: var(--island); }
+.c-grid { stroke: var(--rule); stroke-width: 1; }
+.c-axis { stroke: var(--ink-2); stroke-width: 1; }
+.c-frame { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.c-tick { font: 500 11px var(--display); fill: var(--muted); font-variant-numeric: tabular-nums; }
+.c-end { font: 700 13px var(--display); font-stretch: 84%; fill: var(--ink); }
+.c-seaname { font: italic 500 15px var(--body); letter-spacing: .14em; fill: var(--ink-2); opacity: .62; }
+.c-camp rect { fill: var(--surface); stroke: var(--ink-2); stroke-width: 1.5; }
+.c-camp.is-top rect { stroke: var(--ink); stroke-width: 2.5; }
+.c-label { font: 600 11.5px var(--display); font-stretch: 84%; fill: var(--ink-2); }
+.c-label.strong { fill: var(--ink); font-weight: 700; font-size: 13px; }
+.c-ring { fill: var(--surface); }
+.c-you-o { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.c-you-i { fill: var(--accent); }
+.c-friend { fill: var(--friend); }
+.c-bearing { stroke: var(--accent); stroke-width: 1.5; opacity: .6; }
+.c-hit { fill: transparent; cursor: help; }
+.c-pt:focus-visible { outline: none; }
+.c-pt:focus-visible .c-hit { stroke: var(--accent); stroke-width: 2; }
+
+#tip { position: fixed; z-index: 10; max-width: 270px; padding: 9px 11px; border-radius: 4px; background: var(--ink); color: var(--paper);
+  font: 500 14px/1.35 var(--display); font-stretch: 88%; pointer-events: none; box-shadow: 0 4px 14px rgba(0, 0, 0, .22); }
+#tip b { display: block; font-weight: 700; font-size: 15px; }
+#tip span { display: block; opacity: .86; }
+#tip[hidden] { display: none; }
+
+@media (max-width: 880px) {
+  .hero, .position, .share { grid-template-columns: minmax(0, 1fr); }
+  .hero { padding: 32px 0 40px; }
+  .axes-list { grid-template-columns: minmax(0, 1fr); }
+  .defs { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  .top-right .saved, .likert kbd, .keys { display: none; }
+  .likert { grid-template-columns: minmax(0, 1fr); }
+  .likert button { flex-direction: row; justify-content: flex-start; min-height: 52px; padding: 10px 16px; font-size: 17px; text-align: left; }
+  .statement { margin: 26px 0 22px; min-height: 0; }
+  .scale { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 14px; }
+  .scale .track { grid-column: 1 / -1; grid-row: 2; }
+  .pole.a { text-align: left; }
+  .pole.b { text-align: right; }
+  .facts { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .facts dd { margin-bottom: 10px; }
+  section { margin-top: 44px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn, .likert button { transition: background-color .12s ease, color .12s ease, border-color .12s ease; }
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="tip" role="tooltip" hidden></div>
+
+<script id="core">
+// ---------------------------------------------------------------------------
+// Pure logic and content. No DOM in this block, so it can be loaded and tested
+// with Node (see compass.test.js).
+// ---------------------------------------------------------------------------
+
+const KEYS = ['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8'];
+
+// low = the -100 pole, high = the +100 pole, mid = the synthesis zone around 0.
+const AXES = {
+  D1: { short: 'Risk', name: 'Ontological risk',
+    q: 'What are we building, and can something smarter than us be controlled?',
+    low: ['Techno-Optimist', 'AI is a controllable tool for human abundance.'],
+    mid: ['Conditional Pragmatist', 'High capability brings serious tail risks; how manageable they are depends on engineering rigor.'],
+    high: ['AI Doomer', 'Superintelligence would be an autonomous entity we may not be able to control, and a threat to our existence.'] },
+  D2: { short: 'Pace', name: 'Development velocity',
+    q: 'How fast should the most capable AI be built and released, relative to the rules around it?',
+    low: ['Effective Accelerationist', 'Maximum speed, with as little regulatory friction as possible.'],
+    mid: ['Staged Deployment Advocate', 'Scale up step by step, with each step tied to testing and red-teaming results.'],
+    high: ['Safety-First Advocate', 'Legal guardrails and evidence of safety before scaling further.'] },
+  D3: { short: 'Access', name: 'Control topology',
+    q: 'Who gets access to the most capable models and the recipes for training them?',
+    low: ['Open-Sourcer', 'Public weights, auditable code and power spread across many hands.'],
+    mid: ['Tiered-Access Pragmatist', 'Open weights for models behind the frontier; audited access for the most dangerous ones.'],
+    high: ['Frontier Gatekeeper', 'Closed models, reached through licensed and accountable institutions.'] },
+  D4: { short: 'War', name: 'Geopolitical posture',
+    q: 'How should AI change military power, deterrence and the use of force?',
+    low: ['AI Dove', 'Binding international treaties that ban lethal autonomous weapons.'],
+    mid: ['Deterrence Realist', 'Defensive military AI is acceptable; humans stay in the loop on strategic weapons, by treaty.'],
+    high: ['AI Hawk', 'Military AI superiority over adversaries, because they will not hold back.'] },
+  D5: { short: 'Labor', name: 'Economic integration',
+    q: 'Does AI mostly make human workers more capable, or replace thinking work altogether?',
+    low: ['Augmentation Optimist', 'A cognitive exoskeleton that raises what people can do.'],
+    mid: ['Task-Reallocation Realist', 'Routine thinking tasks get automated; human value moves to judgment, taste and physical work.'],
+    high: ['Labor-Disruption Realist', 'A drop-in replacement that displaces white-collar work at scale.'] },
+  D6: { short: 'Compute', name: 'Infrastructure and compute sovereignty',
+    q: 'Where does intelligence physically live: on many small devices, or in a few giant data centers?',
+    low: ['Distributed and Edge', 'Local chips, shared peer-to-peer computing and ever-smaller models.'],
+    mid: ['Hybrid Federated Grid', 'Public or national clusters for the heavy lifting, local devices for private use.'],
+    high: ['Centralized Mega-Cluster', 'Gigawatt-scale data centers run by a few large companies or states.'] },
+  D7: { short: 'Architecture', name: 'Cognitive architecture',
+    q: 'Does general intelligence emerge from scale alone, or does it need new, engineered designs?',
+    low: ['World-Model Architect', 'It needs causal reasoning, grounded models of the world or hybrid designs.'],
+    mid: ['Architecture Agnostic', 'Scale builds the base; explicit memory, planning and grounding complete it.'],
+    high: ['Scaling Maximalist', 'Sequence prediction with enough data, computing power and reinforcement learning is sufficient.'] },
+  D8: { short: 'Wealth', name: 'Post-labor value distribution',
+    q: 'When thinking work no longer needs human time, who owns what it produces?',
+    low: ['Compute and Data Redistribution', 'Basic income, public compute dividends or royalties for the data AI learned from.'],
+    mid: ['Mixed Stakeholder Capitalism', 'Ordinary company ownership, plus targeted public compute credits and automation taxes.'],
+    high: ['Capital-Compute Capture', 'The surplus belongs to whoever owns the chips, the energy and the models.'] }
+};
+
+// [axis, key, statement, plain-language note].
+// key -1: agreeing points to the axis's low pole. key +1: agreeing points to its high pole.
+// Every axis has three of each, stored as low, high, low, high, low, high.
+const ITEMS = [
+  ['D1', -1, 'However capable AI becomes, it will remain a tool that does what people build it to do.',
+    'The question is whether very capable AI stays an instrument, like software today, or starts acting on goals of its own.'],
+  ['D1', 1, 'If superhuman AI is built before we know how to control it, human extinction is a realistic outcome.',
+    'Superhuman AI means a system that outperforms the best people at nearly every intellectual task.'],
+  ['D1', -1, 'The idea that AI could wipe out humanity belongs in science fiction, not in serious planning.',
+    'Some researchers put a real probability on AI causing human extinction. Others think the scenario is too speculative to plan around.'],
+  ['D1', 1, 'Nobody currently knows how to make sure an AI much smarter than us would keep doing what we want.',
+    'This is often called the alignment problem: getting an AI system’s goals to reliably match what its makers intend.'],
+  ['D1', -1, 'The dangers of more capable AI are ordinary engineering problems that we will fix as they come up.',
+    'The opposing view is that some failures would be too large to fix after the fact.'],
+  ['D1', 1, 'Once an AI can outthink us, we should not expect to be able to switch it off or correct it.',
+    'The worry is that a capable enough system would resist being shut down or changed if that got in the way of its goals.'],
+
+  ['D2', -1, 'Slowing AI down does more harm, in cures not found and problems left unsolved, than moving fast does.',
+    'This weighs the benefits lost to delay against the risks of rapid release.'],
+  ['D2', 1, 'Governments should be able to halt the training of an AI model that crosses agreed danger thresholds.',
+    'Training is the costly process of building a model. A threshold could be the computing power used, or dangerous abilities found in testing.'],
+  ['D2', -1, 'AI companies should be free to release new models without waiting for government approval.',
+    'The alternative is an approval step before release, as there is for new medicines or aircraft.'],
+  ['D2', 1, 'A company should have to show that a powerful new model is safe before it is allowed to release it.',
+    'This puts the burden of proof on the developer, instead of on regulators to show harm afterwards.'],
+  ['D2', -1, 'Rules for AI should respond to harms that have actually happened, not to ones people imagine.',
+    'The opposing view is that some harms are too large to wait for.'],
+  ['D2', 1, 'If we cannot yet show that today’s most powerful AI is safe, building even more powerful systems should wait.',
+    'This is the argument for a pause: capability should not outrun our ability to check it.'],
+
+  ['D3', -1, 'The most capable AI models should be published openly, so that anyone can inspect, run and modify them.',
+    'Publishing a model’s weights, the trained numbers that make it work, lets anyone run it on their own hardware and change it.'],
+  ['D3', 1, 'A published model can never be recalled, so the most capable ones should not be released openly.',
+    'Once a model’s weights are public, copies spread and its built-in safeguards can be removed.'],
+  ['D3', -1, 'A few companies controlling the best AI is a bigger danger than bad actors misusing openly available models.',
+    'This asks you to weigh two risks against each other: concentrated control, and misuse.'],
+  ['D3', 1, 'Access to the most powerful AI should require a license, as it does for other dangerous technologies.',
+    'Licensing would mean that only vetted organizations could build or run the most capable systems.'],
+  ['D3', -1, 'Letting outsiders examine and test AI models makes them safer than keeping them secret does.',
+    'Open models can be audited by anyone. Closed models are tested mainly by their makers and by reviewers the makers invite.'],
+  ['D3', 1, 'Having a handful of accountable companies run the most powerful AI is safer than putting it in everyone’s hands.',
+    'This asks you to weigh two risks against each other: misuse, and concentrated control.'],
+
+  ['D4', -1, 'Weapons that select and attack targets without a human decision should be banned by international treaty.',
+    'These are usually called lethal autonomous weapons.'],
+  ['D4', 1, 'Rivals will build AI weapons whatever any treaty says, so holding back only guarantees defeat.',
+    'This is the deterrence argument: restraint only works if everyone can be trusted to keep to it.'],
+  ['D4', -1, 'An AI arms race makes every country less safe, including whichever one is ahead.',
+    'An arms race here means states competing to field military AI faster than their rivals.'],
+  ['D4', 1, 'Staying ahead of rival states in military AI matters more than agreeing limits with them.',
+    'This asks which you would give up first: a military lead, or an arms-control agreement.'],
+  ['D4', -1, 'AI companies should refuse to build weapons.',
+    'Some AI developers decline military work on principle. Others see it as a responsibility.'],
+  ['D4', 1, 'People who build AI have a duty to help their country’s military get the best systems it can.',
+    'Some AI developers see military work as a responsibility. Others decline it on principle.'],
+
+  ['D5', -1, 'AI will create more good jobs than it destroys.',
+    'This is a prediction about the whole job market, not about any single profession.'],
+  ['D5', 1, 'Within ten years, AI will do most office and knowledge work without a person involved.',
+    'Knowledge work covers jobs done mainly at a computer: writing, analysis, programming, administration.'],
+  ['D5', -1, 'At most jobs, a person working with AI will keep outperforming AI working alone.',
+    'The question is whether people remain a useful part of the team, or become the slow part.'],
+  ['D5', 1, 'This time is different from earlier technologies: AI can learn the new jobs too, so displaced workers will have nowhere to go.',
+    'Earlier machines replaced specific tasks, and workers moved to tasks machines could not do.'],
+  ['D5', -1, 'As with earlier technologies, people will move into new kinds of work that we cannot yet picture.',
+    'Many of today’s jobs did not exist a century ago. The question is whether that pattern continues.'],
+  ['D5', 1, 'AI is likely to cause large, lasting unemployment among office workers.',
+    'Lasting means the jobs do not come back in another form within a few years.'],
+
+  ['D6', -1, 'Within a few years, AI that runs on your own phone or laptop will be good enough for almost everything people need.',
+    'Running a model locally means it works on your own device, without sending your data to a company’s servers.'],
+  ['D6', 1, 'The most capable AI will always need enormous data centers that only a few companies or states can afford.',
+    'The largest AI data centers now being planned would use as much electricity as a city.'],
+  ['D6', -1, 'I would rather run a weaker AI on my own device than rent a stronger one from someone else’s data center.',
+    'This is about your own preference between control and capability.'],
+  ['D6', 1, 'Running powerful AI in a few large, well-guarded facilities is safer than spreading it across millions of devices.',
+    'A few sites are easier to secure and monitor. Many devices are harder for anyone to control or shut off.'],
+  ['D6', -1, 'Public money should go into making AI small and efficient enough to run anywhere, not into ever-bigger data centers.',
+    'This is about where research and infrastructure funding should point.'],
+  ['D6', 1, 'The race to build ever-bigger AI data centers is money and energy well spent.',
+    'Companies and governments are committing very large sums to AI computing capacity.'],
+
+  ['D7', -1, 'Today’s language models will hit a ceiling; human-level AI needs a fundamentally different design.',
+    'Today’s leading systems are large language models, trained to predict text. The question is whether that recipe, scaled up, goes all the way.'],
+  ['D7', 1, 'Bigger models, more data and more computing power are enough to reach human-level AI and beyond.',
+    'This is often called the scaling hypothesis.'],
+  ['D7', -1, 'Predicting the next word, however well, is not the same as understanding how the world works.',
+    'Language models are trained by predicting what comes next in text.'],
+  ['D7', 1, 'To predict text really well, a model has to learn how the world works, and today’s models are doing that.',
+    'The idea is that accurate prediction forces a model to build an internal picture of what the text describes.'],
+  ['D7', -1, 'Real intelligence has to be learned by interacting with the physical world, not from text alone.',
+    'Some researchers argue that text is too thin a slice of reality, and that learning needs video, touch and action.'],
+  ['D7', 1, 'In AI, simple methods given more computing power keep beating clever hand-built designs, and that will continue.',
+    'Researchers call this the Bitter Lesson, after a 2019 essay by Rich Sutton.'],
+
+  ['D8', -1, 'AI is built on humanity’s shared knowledge, so everyone is owed a share of the wealth it creates.',
+    'AI models learn from enormous amounts of text, images and code that people produced.'],
+  ['D8', 1, 'Companies that risk billions building AI are entitled to keep the profits, like any other business.',
+    'This treats AI as an ordinary investment: those who fund it own what it earns.'],
+  ['D8', -1, 'If AI takes over most work, governments should pay everyone a basic income funded by taxes on AI profits.',
+    'A universal basic income is a regular payment to every adult, whether or not they work.'],
+  ['D8', 1, 'Special taxes on AI or automation would do more harm than good by slowing innovation.',
+    'An automation tax would charge companies for replacing workers with machines or software.'],
+  ['D8', -1, 'People whose writing, art or code was used to train an AI should be paid for it.',
+    'This is sometimes called a data royalty.'],
+  ['D8', 1, 'AI’s benefits will reach everyone through cheaper goods and better services, without new redistribution.',
+    'The alternative view is that the gains will stay with whoever owns the AI unless governments step in.']
+];
+
+// The order statements are shown in. Each round of eight has one statement per axis, alternating
+// between poles. After the first two rounds (16 statements) every axis has one statement from each
+// pole, so a short reading is already balanced.
+const ORDER = (() => {
+  const per = ITEMS.length / KEYS.length, out = [];
+  for (let r = 0; r < per; r++) {
+    for (let j = 0; j < KEYS.length; j++) {
+      const ax = (j * 3 + r * 2) % KEYS.length;
+      out.push(ax * per + (ax % 2 === 0 ? r : r ^ 1));
+    }
+  }
+  return out;
+})();
+const SHORT_FORM = 2 * KEYS.length;
+
+// Reference camps. d = profile on D1..D8. lp = preferred label side on the chart (r, l, t, b).
+const FACTIONS = [
+  { name: 'Decentralized Cypherpunk', tag: 'Cypherpunk', d: [-50, -90, -100, -40, -30, -100, -20, -30], lp: 'bltr',
+    creed: 'Keep AI in everyone’s hands.',
+    about: 'People here see concentrated control of AI, by companies or by governments, as a bigger threat than the technology itself. They want open models that run on hardware people own, and as few gatekeepers as possible.',
+    critics: 'A powerful model that has been published cannot be recalled, whatever people end up doing with it.',
+    near: 'Common in the open-weights and local-model communities.' },
+  { name: 'Open-Science Architect', tag: 'Open-Science', d: [-80, -50, -90, -30, -70, -40, -100, -10], lp: 'rtbl',
+    creed: 'Open research, and a better design than today’s models.',
+    about: 'People here treat AI as science that should be done in the open. They doubt that scaling up language models leads to human-level intelligence, find extinction scenarios far-fetched, and expect AI to assist workers more than replace them.',
+    critics: 'If scaling keeps working, this view underrates how fast capability arrives and what open release then puts in anyone’s hands.',
+    near: 'Public figures often placed near here: Yann LeCun.' },
+  { name: 'Techno-Capital Accelerationist', tag: 'Techno-Capital', d: [-100, -100, -30, 80, -40, 60, 70, 100], lp: 'trlb',
+    creed: 'Build it, faster.',
+    about: 'People here see technology and markets as the engine of human progress, and AI as the biggest step yet. Regulation mostly delays the benefits, the builders who take the risk should keep the rewards, and national strength depends on staying ahead.',
+    critics: 'Moving this fast leaves little time to notice harms, and the gains may pile up with a few owners.',
+    near: 'Public figures often placed near here: Marc Andreessen.' },
+  { name: 'Scale Utility Builder', tag: 'Scale Utility', d: [-40, -50, 70, 40, 50, 100, 100, -30], lp: 'ltrb',
+    creed: 'Intelligence as a utility, delivered at scale.',
+    about: 'People here think scaling works, so the job is to build enormous computing capacity and deliver AI to everyone as a service. They release in stages, keep the most capable models in-house, and expect large changes to work, softened by sharing some of the gains.',
+    critics: 'This puts a great deal of power, and a great deal of everyone else’s dependence, in a few providers’ hands.',
+    near: 'Public figures often placed near here: Sam Altman.' },
+  { name: 'Frontier Safety Gatekeeper', tag: 'Safety Gatekeeper', d: [60, 40, 80, 60, 80, 50, 70, -40], lp: 'rblt',
+    creed: 'Powerful AI is coming, and careful hands should hold it.',
+    about: 'People here expect very capable AI soon and take its dangers seriously. Their answer is for a few accountable developers and democratic states to stay in front, with tight control over the most powerful models, while preparing for heavy disruption to jobs.',
+    critics: 'Racing ahead while warning of danger can look contradictory, and safety rules can end up protecting incumbents.',
+    near: 'Public figures often placed near here: Dario Amodei, Mustafa Suleyman.' },
+  { name: 'Sovereign Defense Industrialist', tag: 'Defense Industrialist', d: [-30, -70, 80, 100, 20, 80, 10, 50], lp: 'btlr',
+    creed: 'AI is national power.',
+    about: 'People here treat AI as strategic infrastructure, as steel and electricity were in earlier eras. A nation should own the whole chain, from chips and power plants to military systems, and neither utopian nor apocalyptic stories should distract from that.',
+    critics: 'This logic feeds an arms race and concentrates AI in state and military hands.',
+    near: 'Public figures often placed near here: Alex Karp.' },
+  { name: 'Precautionary Institutionalist', tag: 'Precautionary', d: [70, 90, 50, -90, 50, 0, -20, -70], lp: 'lbrt',
+    creed: 'Guardrails first, agreed between nations.',
+    about: 'People here think advanced AI carries serious risks, some of them catastrophic, and that binding rules, independent oversight and international agreements should come before more capability. They oppose autonomous weapons and want the gains shared widely.',
+    critics: 'Strict rules assume someone knows what safe AI looks like, and they could hold back real benefits.',
+    near: 'Public figures often placed near here: Yoshua Bengio, Stuart Russell.' },
+  { name: 'Existential Hardliner', tag: 'Hardliner', d: [100, 100, 100, -40, 60, 10, 70, 0], lp: 'brlt',
+    creed: 'Do not build it until we can control it.',
+    about: 'People here believe that superhuman AI built with anything like today’s methods would probably end humanity. They want frontier development halted worldwide, by enforceable agreement, until the control problem is solved.',
+    critics: 'A worldwide halt may be unenforceable, and it would give up enormous benefits if the danger is overstated.',
+    near: 'Public figures often placed near here: Eliezer Yudkowsky, Nate Soares.' },
+  { name: 'Institutional Adaptationist', tag: 'Adaptationist', d: [20, 30, 30, 10, 90, 20, 50, -90], lp: 'tlrb',
+    creed: 'The disruption is coming. Get society ready.',
+    about: 'People here take large-scale job displacement as the central fact and put their effort into what follows from it: tax systems, education, safety nets and legal liability. They care less about whether to pause AI than about who is protected when it arrives.',
+    critics: 'Treating displacement as inevitable can mean giving up on steering it, and it may underrate more extreme risks.',
+    near: 'Common among people who work on labor, tax and education policy.' },
+  { name: 'Public-Interest Skeptic', tag: 'Public-Interest Skeptic', d: [-50, 70, -30, -80, 10, -60, -90, -80], lp: 'btrl',
+    creed: 'Less hype, more accountability.',
+    about: 'People here think both the doom and the salvation stories oversell what today’s systems can do. The problems they care about are already here: concentrated corporate power, creative work used without consent, pressure on jobs. They want enforceable rules now.',
+    critics: 'If capability keeps climbing, dismissing the big scenarios leaves society unprepared for them.',
+    near: 'Common among AI ethics researchers and labor advocates.' },
+  { name: 'Pragmatic Augmenter', tag: 'Augmenter', d: [-40, -20, -10, 0, -100, -20, -30, -20], lp: 'lbrt',
+    creed: 'A tool that makes people better at their work.',
+    about: 'People here see AI as a general-purpose tool, like electricity or the computer, that mostly raises what workers can do. They expect new kinds of jobs to appear and see little need for either alarm or a redesign of the economy.',
+    critics: 'If AI can also learn the new jobs, the comparison with earlier technologies stops holding.',
+    near: 'Public figures often placed near here: Erik Brynjolfsson.' }
+];
+
+const ZONE = 25;       // |score| at or below this is the synthesis zone
+const MIN_SIM = 0.45;  // below this similarity, no camp is named
+const FLAT = 15;       // below this average strength, the profile is too flat to match
+const MIN_AXES = 5;    // axes that need a score before any camp is named
+
+// Scores each axis from -100 (low pole) to +100 (high pole).
+// Skipped or unanswered statements are left out, not counted as neutral.
+// conflict: 0..1, how strongly both poles were agreed with. reject: 0..1, how strongly both were rejected.
+function scoreAxes(resp) {
+  const acc = {}, out = {};
+  KEYS.forEach(k => { acc[k] = { lo: 0, nlo: 0, hi: 0, nhi: 0 }; });
+  ITEMS.forEach((it, i) => {
+    const v = resp ? resp['q' + i] : undefined;
+    if (typeof v !== 'number' || !isFinite(v)) return;
+    const c = Math.max(-2, Math.min(2, v)), a = acc[it[0]];
+    if (it[1] === 1) { a.hi += c; a.nhi++; } else { a.lo += c; a.nlo++; }
+  });
+  KEYS.forEach(k => {
+    const a = acc[k], n = a.nlo + a.nhi;
+    if (!n) { out[k] = { score: null, n: 0, conflict: 0, reject: 0 }; return; }
+    const lo = a.nlo ? a.lo / a.nlo : null, hi = a.nhi ? a.hi / a.nhi : null;
+    const both = lo !== null && hi !== null;
+    const score = both ? (hi - lo) * 25 : (hi !== null ? hi * 50 : -lo * 50);
+    out[k] = {
+      score: score + 0, n: n,
+      conflict: both ? Math.max(0, Math.min(lo, hi)) / 2 : 0,
+      reject: both ? Math.max(0, Math.min(-lo, -hi)) / 2 : 0
+    };
+  });
+  return out;
+}
+
+// Chart position. x: access, compute and wealth (distributed to concentrated).
+// y: risk and pace (speed to caution). War, labor and architecture do not move the chart.
+const COMPASS_X = ['D3', 'D6', 'D8'], COMPASS_Y = ['D1', 'D2'];
+function compass(get) {
+  const mean = ks => {
+    const v = ks.map(get).filter(x => typeof x === 'number');
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length + 0 : null;
+  };
+  return { x: mean(COMPASS_X), y: mean(COMPASS_Y) };
+}
+
+// How strongly held the profile is, and how much of it cancels out.
+function profile(s) {
+  const got = KEYS.filter(k => s[k] && s[k].score !== null);
+  const avg = f => got.length ? got.reduce((t, k) => t + f(s[k]), 0) / got.length : 0;
+  return { axes: got.length, strength: Math.sqrt(avg(a => a.score * a.score)), conflict: avg(a => a.conflict), reject: avg(a => a.reject) };
+}
+
+// Every camp with its similarity to the profile (cosine, -1..1), best first. Empty if the profile is too thin or flat.
+function similarities(s) {
+  const p = profile(s);
+  if (p.axes < MIN_AXES || p.strength < FLAT) return [];
+  const idx = KEYS.map((k, i) => (s[k].score === null ? -1 : i)).filter(i => i >= 0);
+  return FACTIONS.map(f => {
+    let dot = 0, na = 0, nb = 0;
+    idx.forEach(i => { const v = s[KEYS[i]].score; dot += v * f.d[i]; na += v * v; nb += f.d[i] * f.d[i]; });
+    return Object.assign({}, f, { sim: na && nb ? dot / Math.sqrt(na * nb) : 0 });
+  }).sort((a, b) => b.sim - a.sim);
+}
+
+// Camps close enough to name, best first.
+function rank(s) { return similarities(s).filter(r => r.sim >= MIN_SIM); }
+
+// 0..1: how close two sets of axis scores are. 1 = identical, 0 = 100 points apart on average.
+function agreement(a, b) {
+  const ks = KEYS.filter(k => a[k].score !== null && b[k].score !== null);
+  if (!ks.length) return null;
+  const gap = ks.reduce((t, k) => t + Math.abs(a[k].score - b[k].score), 0) / ks.length;
+  return Math.max(0, 1 - gap / 100);
+}
+
+// Share codes: every answer packed into letters and digits, so a code survives chat apps and URLs.
+const CODE_PREFIX = 'AIC2';
+const B36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const CHECK = 1291;    // prime below 36 * 36: the two check characters catch any single wrong or swapped character
+function cleanName(name) {
+  return String(name == null ? '' : name).replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+}
+function encodeCode(resp, name) {
+  const v = ITEMS.map((it, i) => {
+    const x = resp ? resp['q' + i] : undefined;
+    return typeof x === 'number' && isFinite(x) ? Math.max(-2, Math.min(2, Math.round(x))) + 3 : 0;
+  });
+  let body = '', sum = 0;
+  for (let i = 0; i < v.length; i += 2) { const d = v[i] * 6 + v[i + 1]; body += B36[d]; sum += d * (i / 2 + 1); }
+  sum %= CHECK;
+  let out = CODE_PREFIX + '-' + body.match(/.{1,6}/g).join('-') + '-' + B36[Math.floor(sum / 36)] + B36[sum % 36];
+  const nm = cleanName(name);
+  if (nm) {
+    try {
+      out += '-' + encodeURIComponent(nm).replace(/%([0-9A-F]{2})|([\s\S])/g,
+        (m, hex, ch) => hex || ('0' + ch.charCodeAt(0).toString(16).toUpperCase()).slice(-2));
+    } catch (e) { /* unpaired surrogate: leave the name off */ }
+  }
+  return out;
+}
+function decodeCode(str) {
+  const pairs = ITEMS.length / 2;
+  const m = new RegExp(CODE_PREFIX + '((?:-?[0-9A-Z]){' + (pairs + 2) + '})(?:-?((?:[0-9A-F]{2})+))?(?![0-9A-Z])')
+    .exec(String(str == null ? '' : str).toUpperCase().replace(/\s+/g, ''));
+  if (!m) return null;
+  const body = m[1].replace(/-/g, ''), resp = {};
+  let sum = 0;
+  for (let i = 0; i < pairs; i++) {
+    const d = B36.indexOf(body[i]);
+    sum += d * (i + 1);
+    const a = Math.floor(d / 6), b = d % 6;
+    if (a) resp['q' + (2 * i)] = a - 3;
+    if (b) resp['q' + (2 * i + 1)] = b - 3;
+  }
+  sum %= CHECK;
+  if (B36[Math.floor(sum / 36)] + B36[sum % 36] !== body.slice(pairs)) return null;
+  let name = '';
+  if (m[2]) { try { name = cleanName(decodeURIComponent(m[2].replace(/../g, '%$&'))); } catch (e) { name = ''; } }
+  return { resp: resp, name: name };
+}
+</script>
+
+<script>
+(() => {
+'use strict';
+
+const $app = document.getElementById('app'), $tip = document.getElementById('tip');
+const STORE = 'ai-compass-v2', SVGNS = 'http://www.w3.org/2000/svg', MAX_FRIENDS = 8;
+const LIKERT = [[-2, 'Strongly disagree'], [-1, 'Disagree'], [0, 'Neutral'], [1, 'Agree'], [2, 'Strongly agree']];
+const ANSWER = { '-2': 'Strongly disagree', '-1': 'Disagree', '0': 'Neutral', '1': 'Agree', '2': 'Strongly agree' };
+const QUADS = {
+  tl: ['Public Guardrails', 'strong rules on AI, with its power and benefits widely spread'],
+  tr: ['Guarded Frontier', 'strong rules on AI, with the most powerful systems held by a few accountable institutions'],
+  bl: ['Open Acceleration', 'AI built fast and in the open, with models and computing power in many hands'],
+  br: ['Industrial Acceleration', 'AI built fast and at scale by the companies and states able to fund it']
+};
+const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let framed = true;
+try { framed = window.self !== window.top; } catch (e) { framed = true; }
+
+const st = { view: 'intro', idx: 0, resp: {}, name: '', friends: [], viewing: null, note: '' };
+let busy = false, afterRender = [], mounted = [];
+let editOne = null;   // set to an axis id while one answer is being changed from the result page
+
+// ---------- tiny DOM helpers ----------
+function add(el, kid) {
+  if (kid == null || kid === false) return;
+  if (Array.isArray(kid)) kid.forEach(k => add(el, k));
+  else el.appendChild(kid.nodeType ? kid : document.createTextNode(String(kid)));
+}
+function h(tag, props) {
+  const el = document.createElement(tag);
+  for (const k in (props || {})) {
+    const v = props[k];
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else if (k.slice(0, 2) === 'on') el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (let i = 2; i < arguments.length; i++) add(el, arguments[i]);
+  return el;
+}
+function sv(tag, attrs) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in (attrs || {})) if (attrs[k] != null) el.setAttribute(k, attrs[k]);
+  for (let i = 2; i < arguments.length; i++) add(el, arguments[i]);
+  return el;
+}
+const btn = (text, kind, onclick, extra) => h('button', Object.assign({ class: 'btn' + (kind ? ' ' + kind : ''), type: 'button', text: text, onclick: onclick }, extra || {}));
+const num = v => (v < 0 ? '−' : '') + Math.abs(Math.round(v));
+const pct = v => Math.round(v * 100) + '%';
+const possessive = n => n + (/s$/i.test(n) ? '’' : '’s');
+
+// ---------- state ----------
+function sanitize(o) {
+  const out = {};
+  if (!o || typeof o !== 'object') return out;
+  if (['intro', 'quiz', 'result'].indexOf(o.view) >= 0) out.view = o.view;
+  if (Number.isInteger(o.idx)) out.idx = Math.max(0, Math.min(ORDER.length - 1, o.idx));
+  if (o.resp && typeof o.resp === 'object') {
+    out.resp = {};
+    ITEMS.forEach((it, i) => {
+      const v = o.resp['q' + i];
+      if (v === null || (Number.isInteger(v) && v >= -2 && v <= 2)) out.resp['q' + i] = v;
     });
-    assert.equal(rank(scoreAxes(resp))[0].name, f.name);
   }
+  if (typeof o.name === 'string') out.name = cleanName(o.name);
+  if (Array.isArray(o.friends)) {
+    out.friends = o.friends.filter(f => f && typeof f.code === 'string' && decodeCode(f.code))
+      .slice(0, MAX_FRIENDS).map(f => ({ code: f.code, name: cleanName(f.name) }));
+  }
+  return out;
+}
+const snapshot = () => ({ view: st.view, idx: st.idx, resp: st.resp, name: st.name, friends: st.friends });
+function save() { try { localStorage.setItem(STORE, JSON.stringify(snapshot())); } catch (e) { /* storage unavailable: carry on in memory */ } }
+function load() { try { Object.assign(st, sanitize(JSON.parse(localStorage.getItem(STORE) || 'null'))); } catch (e) { /* ignore */ } }
+
+const touched = () => ITEMS.reduce((n, it, i) => n + (('q' + i) in st.resp ? 1 : 0), 0);
+const answered = r => ITEMS.reduce((n, it, i) => n + (typeof (r || st.resp)['q' + i] === 'number' ? 1 : 0), 0);
+const firstOpen = () => { const k = ORDER.findIndex(i => !(('q' + i) in st.resp)); return k < 0 ? ORDER.length - 1 : k; };
+const canRead = () => answered() >= SHORT_FORM;
+const bodyOf = code => code.split('-').slice(1, 5).join('');
+function friends() {
+  return st.friends.map((f, i) => {
+    const d = decodeCode(f.code);
+    return { name: f.name || d.name || 'Friend ' + (i + 1), resp: d.resp, sc: scoreAxes(d.resp), i: i };
+  });
+}
+function addFriend(text) {
+  const d = decodeCode(text);
+  if (!d) return 'That code doesn’t check out. Paste the whole thing, starting with ' + CODE_PREFIX + '.';
+  const code = encodeCode(d.resp, d.name);
+  if (answered() && bodyOf(code) === bodyOf(encodeCode(st.resp, ''))) return 'That is your own code. Paste one a friend sent you.';
+  const at = st.friends.findIndex(f => bodyOf(f.code) === bodyOf(code));
+  if (at >= 0) { st.friends[at] = { code: code, name: d.name }; return ''; }
+  if (st.friends.length >= MAX_FRIENDS) return 'The chart holds ' + MAX_FRIENDS + ' friends. Remove one to add another.';
+  st.friends.push({ code: code, name: d.name });
+  return '';
+}
+
+// ---------- tooltip ----------
+function showTip(target, title, lines) {
+  $tip.replaceChildren(h('b', { text: title }), ...lines.filter(Boolean).map(l => h('span', { text: l })));
+  $tip.hidden = false;
+  const r = target.getBoundingClientRect(), t = $tip.getBoundingClientRect();
+  const x = Math.max(8, Math.min(window.innerWidth - t.width - 8, r.left + r.width / 2 - t.width / 2));
+  let y = r.top - t.height - 8;
+  if (y < 8) y = r.bottom + 8;
+  $tip.style.left = x + 'px'; $tip.style.top = y + 'px';
+}
+function hideTip() { $tip.hidden = true; }
+function tip(el, title, lines) {
+  const show = () => showTip(el, title, lines);
+  el.addEventListener('pointerenter', show);
+  el.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') hideTip(); });
+  el.addEventListener('focus', show);
+  el.addEventListener('blur', hideTip);
+  el.addEventListener('click', e => { show(); e.stopPropagation(); });
+  return el;
+}
+document.addEventListener('click', hideTip);
+window.addEventListener('scroll', hideTip, { passive: true });
+
+// ---------- reading helpers ----------
+function whereText(c) {
+  if (c.x === null || c.y === null) return '';
+  const x = Math.round(c.x), y = Math.round(c.y);
+  return Math.abs(x) + ' toward ' + (x < 0 ? 'distributed' : 'concentrated') + ', ' + Math.abs(y) + ' toward ' + (y < 0 ? 'speed' : 'caution');
+}
+function quadrant(c) {
+  if (Math.abs(c.x) <= ZONE && Math.abs(c.y) <= ZONE) return null;
+  return QUADS[(c.y > 0 ? 't' : 'b') + (c.x < 0 ? 'l' : 'r')];
+}
+function axisRead(k, a) {
+  const A = AXES[k];
+  if (!a || a.score === null) return { title: 'No answers on this axis yet', num: '', side: 0 };
+  const s = Math.round(a.score), abs = Math.abs(s), pole = s < 0 ? A.low[0] : A.high[0];
+  if (abs <= ZONE) return { title: A.mid[0], num: abs ? 'middle ground, ' + abs + ' toward ' + pole : 'middle ground, dead center', side: 0 };
+  return { title: (abs > 60 ? 'Firmly ' : 'Leans ') + pole, num: abs + ' of 100', side: s < 0 ? -1 : 1 };
+}
+function verdict(s) {
+  const p = profile(s), r = rank(s);
+  if (p.axes < MIN_AXES) return { kind: 'thin' };
+  if (r.length) return { kind: 'camp', top: r[0], rest: r.slice(1, 3) };
+  if (p.strength < FLAT) return { kind: p.conflict >= 0.4 ? 'torn' : 'middle' };
+  return { kind: 'uncharted' };
+}
+
+// ---------- the chart ----------
+function drawCompass(box, data) {
+  const W = Math.max(260, Math.min(620, Math.floor(box.getBoundingClientRect().width)));
+  const small = W < 440;
+  const m = { l: 32, r: 8, t: 8, b: 26 };
+  const P = W - m.l - m.r, H = P + m.t + m.b;
+  const X = v => m.l + (v + 100) / 200 * P, Y = v => m.t + (100 - v) / 200 * P;
+  const svg = sv('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, role: 'group', 'aria-label': data.label });
+  const placed = [];
+  const tw = (s, px) => s.length * px * 0.52 + 4;
+
+  svg.append(sv('rect', { class: 'c-sea', x: m.l, y: m.t, width: P, height: P }),
+    sv('rect', { class: 'c-island', x: X(-ZONE), y: Y(ZONE), width: P * ZONE / 100, height: P * ZONE / 100, rx: 3 }));
+  [-50, 50].forEach(v => svg.append(
+    sv('line', { class: 'c-grid', x1: X(v), x2: X(v), y1: m.t, y2: m.t + P }),
+    sv('line', { class: 'c-grid', y1: Y(v), y2: Y(v), x1: m.l, x2: m.l + P })));
+  svg.append(sv('line', { class: 'c-axis', x1: X(0), x2: X(0), y1: m.t, y2: m.t + P }),
+    sv('line', { class: 'c-axis', y1: Y(0), y2: Y(0), x1: m.l, x2: m.l + P }),
+    sv('rect', { class: 'c-frame', x: m.l, y: m.t, width: P, height: P }));
+  [-100, -50, 0, 50, 100].forEach(v => svg.append(
+    sv('text', { class: 'c-tick', x: X(v), y: m.t + P + 17, 'text-anchor': v === -100 ? 'start' : v === 100 ? 'end' : 'middle' }, num(v)),
+    sv('text', { class: 'c-tick', x: m.l - 6, y: Y(v) + (v === 100 ? 9 : v === -100 ? -1 : 4), 'text-anchor': 'end' }, num(v))));
+
+  // the four seas, named like water on a chart
+  const seaPx = small ? 12.5 : 15;
+  [['Public', 'Guardrails', -64, 58], ['Guarded', 'Frontier', 71, 76], ['Open', 'Acceleration', -64, -31], ['Industrial', 'Acceleration', 67, -24]].forEach(q => {
+    const t = sv('text', { class: 'c-seaname', 'text-anchor': 'middle', style: 'font-size:' + seaPx + 'px', 'aria-hidden': 'true' },
+      sv('tspan', { x: X(q[2]), y: Y(q[3]) }, q[0]), sv('tspan', { x: X(q[2]), dy: seaPx * 1.15 }, q[1]));
+    svg.append(t);
+    const w = Math.max(q[0].length, q[1].length) * seaPx * 0.62;
+    placed.push({ x0: X(q[2]) - w / 2, x1: X(q[2]) + w / 2, y0: Y(q[3]) - seaPx, y1: Y(q[3]) + seaPx * 1.5 });
+  });
+  // axis ends
+  [['Caution', X(0) + 7, m.t + 17, 'start'], ['Speed', X(0) + 7, m.t + P - 9, 'start'],
+    ['Distributed', m.l + 7, Y(0) + 16, 'start'], ['Concentrated', m.l + P - 7, Y(0) + 16, 'end']].forEach(e => {
+    svg.append(sv('text', { class: 'c-end', x: e[1], y: e[2], 'text-anchor': e[3] }, e[0]));
+    const w = tw(e[0], 13);
+    placed.push({ x0: e[3] === 'end' ? e[1] - w : e[1], x1: e[3] === 'end' ? e[1] : e[1] + w, y0: e[2] - 12, y1: e[2] + 3 });
+  });
+
+  const pts = [];
+  data.camps.forEach((c, i) => pts.push({ kind: 'camp', x: c.x, y: c.y, r: 5, label: c.tag, prefs: c.lp, top: c.top,
+    wantLabel: i < (small ? (data.you ? 3 : 5) : 99), title: c.name, lines: [c.creed, whereText(c)] }));
+  (data.friends || []).forEach(f => pts.push({ kind: 'friend', x: f.x, y: f.y, r: 8, label: f.name, prefs: 'rltb', wantLabel: true,
+    title: f.name, lines: [whereText(f), f.camp ? 'Closest camp: ' + f.camp : ''] }));
+  if (data.you) pts.push({ kind: 'you', x: data.you.x, y: data.you.y, r: 10, label: data.you.name, prefs: 'rltb', wantLabel: true,
+    title: data.you.name, lines: [whereText(data.you), data.you.camp ? 'Closest camp: ' + data.you.camp : ''] });
+  pts.forEach(p => { p.px = X(p.x); p.py = Y(p.y); placed.push({ x0: p.px - p.r - 2, x1: p.px + p.r + 2, y0: p.py - p.r - 2, y1: p.py + p.r + 2 }); });
+
+  const hits = b => placed.some(q => b.x0 < q.x1 && b.x1 > q.x0 && b.y0 < q.y1 && b.y1 > q.y0);
+  function place(p) {
+    const px = p.kind === 'camp' && !p.top ? 11.5 : 13, w = tw(p.label, px), hgt = px + 3, r = p.r;
+    const inY = y => Math.max(m.t + 4, Math.min(m.t + P - 4 - hgt, y)), inX = x => Math.max(m.l + 4, Math.min(m.l + P - 4 - w, x));
+    const opts = {
+      r: [p.px + r + 4, inY(p.py - hgt / 2)], l: [p.px - r - 4 - w, inY(p.py - hgt / 2)],
+      b: [inX(p.px - w / 2), p.py + r + 3], t: [inX(p.px - w / 2), p.py - r - 3 - hgt]
+    };
+    for (const k of p.prefs) {
+      const b = { x0: opts[k][0], y0: opts[k][1], x1: opts[k][0] + w, y1: opts[k][1] + hgt };
+      if (b.x0 < m.l + 3 || b.x1 > m.l + P - 3 || b.y0 < m.t + 3 || b.y1 > m.t + P - 3 || hits(b)) continue;
+      placed.push(b);
+      return { x: k === 'r' ? b.x0 + 2 : k === 'l' ? b.x1 - 2 : b.x0 + w / 2, y: b.y1 - 4.5, anchor: k === 'r' ? 'start' : k === 'l' ? 'end' : 'middle' };
+    }
+    return null;
+  }
+  // labels: you first, then friends, then camps in the order given (best match first)
+  ['you', 'friend', 'camp'].forEach(kind => pts.filter(p => p.kind === kind && p.wantLabel).forEach(p => { p.lab = place(p); }));
+
+  if (data.you && data.bearing) {
+    svg.append(sv('line', { class: 'c-bearing', x1: X(data.you.x), y1: Y(data.you.y), x2: X(data.bearing.x), y2: Y(data.bearing.y) }));
+  }
+  ['camp', 'friend', 'you'].forEach(kind => pts.filter(p => p.kind === kind).forEach(p => {
+    const g = sv('g', { class: 'c-pt c-' + p.kind + (p.top ? ' is-top' : ''), tabindex: 0, role: 'img',
+      'aria-label': p.title + ': ' + p.lines.filter(Boolean).join('. ') });
+    if (p.kind === 'camp') g.append(sv('rect', { x: p.px - 4.5, y: p.py - 4.5, width: 9, height: 9 }));
+    if (p.kind === 'friend') g.append(
+      sv('rect', { class: 'c-ring', x: p.px - 7.5, y: p.py - 7.5, width: 15, height: 15, transform: 'rotate(45 ' + p.px + ' ' + p.py + ')' }),
+      sv('rect', { class: 'c-friend', x: p.px - 5.5, y: p.py - 5.5, width: 11, height: 11, transform: 'rotate(45 ' + p.px + ' ' + p.py + ')' }));
+    if (p.kind === 'you') g.append(sv('circle', { class: 'c-ring', cx: p.px, cy: p.py, r: 11.5 }),
+      sv('circle', { class: 'c-you-o', cx: p.px, cy: p.py, r: 8 }), sv('circle', { class: 'c-you-i', cx: p.px, cy: p.py, r: 3.4 }));
+    if (p.lab) g.append(sv('text', { class: 'c-label' + (p.kind !== 'camp' || p.top ? ' strong' : ''), x: p.lab.x, y: p.lab.y, 'text-anchor': p.lab.anchor }, p.label));
+    g.append(sv('circle', { class: 'c-hit', cx: p.px, cy: p.py, r: 13 }));
+    tip(g, p.title, p.lines);
+    svg.append(g);
+  }));
+  box.replaceChildren(svg);
+}
+function compassBox(data) {
+  const box = h('div', { class: 'compass' });
+  afterRender.push(() => { mounted.push([box, data]); drawCompass(box, data); });
+  return box;
+}
+function campPoints(order) {
+  const list = order || FACTIONS;
+  return list.map((f, i) => Object.assign(compass(k => f.d[KEYS.indexOf(k)]), { name: f.name, tag: f.tag, lp: f.lp, creed: f.creed, top: !!order && i === 0 && f.sim >= MIN_SIM }));
+}
+let redraw = 0;
+function redrawAll() { cancelAnimationFrame(redraw); redraw = requestAnimationFrame(() => mounted.forEach(m => { if (m[0].isConnected) drawCompass(m[0], m[1]); })); }
+window.addEventListener('resize', redrawAll);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+function legend(hasYou, youLabel, hasFriends) {
+  const sw = kid => sv('svg', { width: 22, height: 22, viewBox: '0 0 22 22', 'aria-hidden': 'true' }, kid);
+  return h('ul', { class: 'legend' },
+    hasYou && h('li', null, sw([sv('circle', { class: 'c-you-o', cx: 11, cy: 11, r: 8 }), sv('circle', { class: 'c-you-i', cx: 11, cy: 11, r: 3.4 })]), youLabel),
+    hasFriends && h('li', null, sw(sv('rect', { class: 'c-friend', x: 5.5, y: 5.5, width: 11, height: 11, transform: 'rotate(45 11 11)' })), 'Friends'),
+    h('li', { class: 'c-camp' }, sw(sv('rect', { x: 6.5, y: 6.5, width: 9, height: 9 })), 'Reference camps'),
+    h('li', null, sw(sv('rect', { class: 'c-island', x: 3, y: 5, width: 16, height: 12, rx: 2 })), 'Middle ground'));
+}
+
+// ---------- views ----------
+function go(view) { editOne = null; st.view = view; hideTip(); render(true); window.scrollTo(0, 0); }
+
+function topBar() {
+  const rose = sv('svg', { width: 24, height: 24, viewBox: '0 0 24 24', 'aria-hidden': 'true' },
+    sv('circle', { class: 'c-you-o', cx: 12, cy: 12, r: 9 }), sv('circle', { class: 'c-you-i', cx: 12, cy: 12, r: 3.6 }));
+  const right = [];
+  if (st.view === 'quiz') right.push(h('span', { class: 'saved', text: 'Your answers save as you go' }), btn('Exit', 'quiet', () => go('intro')));
+  if (st.view === 'result') right.push(btn('Home', 'quiet', () => { st.viewing = null; go('intro'); }));
+  return h('header', { class: 'top' },
+    h('button', { class: 'brand', type: 'button', title: 'Back to the start', onclick: () => { st.viewing = null; go('intro'); } }, rose, h('span', { text: 'AI Compass' })),
+    h('div', { class: 'top-right' }, right));
+}
+
+function eraseBtn(label) {
+  let armed = 0;
+  const b = btn(label, 'quiet', () => {
+    if (!armed) { b.textContent = 'Press again to erase your answers'; armed = setTimeout(() => { armed = 0; b.textContent = label; }, 4000); return; }
+    clearTimeout(armed);
+    st.resp = {}; st.idx = 0; st.viewing = null; go('quiz');
+  });
+  return b;
+}
+
+function introView() {
+  const some = touched() > 0, done = touched() === ITEMS.length, fr = friends();
+  const sc = scoreAxes(st.resp), me = canRead() ? compass(k => sc[k].score) : null;
+  const cta = [];
+  if (!some) cta.push(btn('Start the quiz', 'primary', () => { st.idx = 0; go('quiz'); }, { 'data-focus': true }));
+  else if (!done) {
+    cta.push(btn('Continue at statement ' + (firstOpen() + 1), 'primary', () => { st.idx = firstOpen(); go('quiz'); }, { 'data-focus': true }));
+    if (canRead()) cta.push(btn('See your result so far', '', () => { st.viewing = null; go('result'); }));
+    cta.push(eraseBtn('Start over'));
+  } else {
+    cta.push(btn('See your result', 'primary', () => { st.viewing = null; go('result'); }, { 'data-focus': true }));
+    cta.push(eraseBtn('Retake the quiz'));
+  }
+  const camps = campPoints();
+  const top = me ? rank(sc)[0] : null;
+  const chart = h('figure', { class: 'chart' },
+    compassBox({
+      label: 'Chart of eleven reference camps by caution and concentration',
+      camps: camps,
+      you: me && { x: me.x, y: me.y, name: 'You', camp: top && top.name },
+      friends: fr.map(f => Object.assign(compass(k => f.sc[k].score), { name: f.name })).filter(f => f.x !== null && f.y !== null)
+    }),
+    h('figcaption', { text: 'Eleven reference camps. Left to right: how concentrated control of AI should be. Bottom to top: how much caution it calls for. Point at a mark to read about it.' }));
+
+  return h('main', null,
+    h('div', { class: 'hero' },
+      h('div', null,
+        h('h1', { text: 'Where do you stand on AI?' }),
+        h('p', { class: 'lede', text: 'The people building, funding and regulating AI disagree about eight separate things. Rate 48 statements and this chart places you on all eight, names the camp you sit closest to, and lets you compare with friends.' }),
+        st.note && h('p', { class: 'notice', role: 'status', text: st.note }),
+        h('div', { class: 'row' }, cta),
+        h('p', { class: 'fine', text: some ? 'Your answers are saved in this browser only.' : 'About 8 minutes. After 16 statements you can stop for a rough reading. Your answers stay in this browser.' }),
+        fr.length > 0 && !canRead() && h('div', { class: 'row' }, fr.map(f => btn('See ' + possessive(f.name) + ' result', 'small', () => { st.viewing = f.i; go('result'); })))),
+      chart),
+    h('section', null,
+      h('h2', { text: 'The eight questions' }),
+      h('ul', { class: 'axes-list' }, KEYS.map(k => h('li', null,
+        h('h3', { text: AXES[k].short }),
+        h('p', { text: AXES[k].q }),
+        h('div', { class: 'versus' }, h('span', { text: AXES[k].low[0] }), h('i'), h('span', { text: AXES[k].high[0] })))))));
+}
+
+function quizView() {
+  const i = ORDER[st.idx], it = ITEMS[i], cur = st.resp['q' + i], has = ('q' + i) in st.resp;
+  const ticks = h('div', { class: 'ticks', 'aria-hidden': 'true' }, ORDER.map((q, n) => {
+    const v = st.resp['q' + q];
+    return h('i', { class: (n === st.idx ? 'now' : ('q' + q) in st.resp ? (v === null ? 'skip' : 'done') : '') + (n === SHORT_FORM - 1 ? ' gate' : '') });
+  }));
+  const left = ORDER.length - touched();
+  return h('main', { class: 'quiz' },
+    ticks,
+    h('div', { class: 'count' },
+      h('span', { text: 'Statement ' + (st.idx + 1) + ' of ' + ORDER.length }),
+      h('span', { text: 'About: ' + AXES[it[0]].short.toLowerCase() })),
+    h('h1', { class: 'statement', tabindex: -1, 'data-focus': true, text: it[2] }),
+    h('div', { class: 'likert', role: 'group', 'aria-label': 'Your answer' }, LIKERT.map((l, n) =>
+      h('button', { type: 'button', 'data-v': l[0], 'aria-pressed': String(cur === l[0]), onclick: () => answer(l[0]) },
+        h('span', { text: l[1] }), h('kbd', { text: n + 1 })))),
+    h('div', { class: 'under' },
+      h('details', { class: 'note' }, h('summary', { text: 'What does this mean?' }), h('p', { text: it[3] })),
+      h('button', { class: 'btn quiet', type: 'button', 'data-v': 'null', 'aria-pressed': String(has && cur === null), text: 'Not sure, skip this one', onclick: () => answer(null) })),
+    h('div', { class: 'quiz-nav' },
+      btn('Back', 'small', () => step(-1), { disabled: st.idx === 0 }),
+      canRead() ? btn(left ? 'Stop here and see a rough result' : 'See your result', 'small', () => { st.viewing = null; go('result'); }) : null,
+      btn('Next', 'small', () => step(1), { disabled: !has })),
+    h('p', { class: 'keys', text: 'Keyboard: 1 to 5 to answer, 0 to skip, arrow keys to move.' }));
+}
+function answer(v) {
+  if (busy || st.view !== 'quiz') return;
+  st.resp['q' + ORDER[st.idx]] = v;
+  save();
+  $app.querySelectorAll('[data-v]').forEach(b => b.setAttribute('aria-pressed', String(b.getAttribute('data-v') === String(v))));
+  busy = true;
+  setTimeout(() => {
+    busy = false;
+    if (editOne) {            // came here to change one answer: go straight back to that axis
+      const k = editOne; st.viewing = null; go('result');
+      const el = document.getElementById('axis-' + k); if (el) el.scrollIntoView({ block: 'center' });
+    } else if (st.idx >= ORDER.length - 1) { st.viewing = null; go('result'); } else { st.idx++; render(true); }
+  }, reduceMotion ? 0 : 170);
+}
+function step(d) {
+  const n = st.idx + d;
+  if (busy || n < 0 || n >= ORDER.length) return;
+  if (d > 0 && !(('q' + ORDER[st.idx]) in st.resp)) return;
+  st.idx = n; render(true);
+}
+document.addEventListener('keydown', e => {
+  if (st.view !== 'quiz' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.key >= '1' && e.key <= '5') { answer(LIKERT[+e.key - 1][0]); e.preventDefault(); }
+  else if (e.key === '0') { answer(null); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') step(-1);
+  else if (e.key === 'ArrowRight') step(1);
 });
 
-test('random respondents are not funneled to one archetype (largest share under 25%)', () => {
-  let seed = 12345;                                      // mulberry32, fixed seed
-  const rnd = () => { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-  const wins = {}; let n = 0;
-  for (let r = 0; r < 20000; r++) {
-    const top = rank(scoreAxes(answerAll(() => Math.floor(rnd() * 5) - 2)))[0];
-    if (top) { wins[top.name] = (wins[top.name] || 0) + 1; n++; }
-  }
-  assert.ok(Math.max(...Object.values(wins)) / n < 0.25, JSON.stringify(wins));
-});
+function axisBlock(k, a, self, resp, fr) {
+  const A = AXES[k], rd = axisRead(k, a), s = a.score;
+  const track = h('div', { class: 'track', role: 'img', 'aria-label': A.short + ': ' + rd.title + (rd.num ? ', ' + rd.num : '') },
+    h('span', { class: 'zone' }), h('span', { class: 'line' }),
+    h('span', { class: 'end', style: 'left:0' }), h('span', { class: 'end', style: 'right:0' }), h('span', { class: 'mid' }),
+    s !== null && Math.round(s) !== 0 && h('span', { class: 'fill ' + (s < 0 ? 'neg' : 'pos'), style: s < 0 ? 'left:' + (50 + s / 2) + '%;width:' + (-s / 2) + '%' : 'left:50%;width:' + (s / 2) + '%' }),
+    fr.filter(f => f.sc[k].score !== null).map(f => {
+      const r = axisRead(k, f.sc[k]);
+      return tip(h('button', { class: 'fr', type: 'button', style: 'left:' + (50 + f.sc[k].score / 2) + '%', 'aria-label': f.name + ': ' + r.title }), f.name, [r.title, r.num]);
+    }));
+  const chips = [];
+  if (a.conflict >= 0.5) chips.push(tip(h('span', { class: 'chip', tabindex: 0, text: 'Pulled both ways' }), 'Pulled both ways',
+    ['Statements from both poles got agreement, so they cancel out. This is different from having no view.']));
+  if (a.reject >= 0.5) chips.push(tip(h('span', { class: 'chip', tabindex: 0, text: 'Neither pole fits' }), 'Neither pole fits',
+    ['Statements from both poles got disagreement, so they cancel out.']));
+  const mine = ORDER.filter(i => ITEMS[i][0] === k);
+  return h('div', { class: 'axis', id: 'axis-' + k },
+    h('div', { class: 'axis-head' }, h('h3', { text: A.short }), h('p', { text: A.q })),
+    h('div', { class: 'scale' },
+      h('span', { class: 'pole a' + (rd.side < 0 ? ' on' : ''), text: A.low[0] }), track,
+      h('span', { class: 'pole b' + (rd.side > 0 ? ' on' : ''), text: A.high[0] })),
+    h('div', { class: 'read' }, h('b', { text: rd.title }), rd.num && h('span', { class: 'num', text: rd.num }), chips),
+    h('details', null,
+      h('summary', { text: 'The positions, and the answers behind this score' }),
+      h('div', { class: 'defs' }, [A.low, A.mid, A.high].map(d => h('div', null, h('h4', { text: d[0] }), h('p', { text: d[1] })))),
+      h('ul', { class: 'answers' }, mine.map(i => {
+        const v = resp['q' + i], it = ITEMS[i], given = typeof v === 'number';
+        const toward = it[1] === 1 ? A.high[0] : A.low[0];
+        return h('li', null,
+          h('p', { class: 'st', text: it[2] }),
+          h('div', { class: 'an' },
+            h('span', null, h('b', { text: given ? ANSWER[v] : ('q' + i) in resp ? 'Skipped' : 'Not answered yet' }), '. Agreeing points toward ' + toward + '.'),
+            self && btn(given ? 'Change' : 'Answer', 'quiet', () => { st.idx = ORDER.indexOf(i); go('quiz'); editOne = k; })));
+      }))));
+}
 
-test('MIN_SIM is a sane threshold', () => assert.ok(MIN_SIM > 0 && MIN_SIM < 1));
+function resultView() {
+  const all = friends();
+  const viewing = st.viewing != null ? all[st.viewing] : null;
+  const self = !viewing;
+  const resp = self ? st.resp : viewing.resp, sc = scoreAxes(resp);
+  const fr = self ? all : [];
+  const v = verdict(sc), sims = similarities(sc), pos = compass(k => sc[k].score);
+  const n = answered(resp), left = ITEMS.length - touched();
+  const whose = self ? 'Your' : possessive(viewing.name);
+  const youName = self ? 'You' : viewing.name;
+
+  const head = [];
+  if (v.kind === 'camp') {
+    const fit = v.top.sim >= 0.75 ? 'a close fit' : v.top.sim >= 0.6 ? 'a fair fit' : 'a loose fit';
+    head.push(
+      h('p', { class: 'kicker', text: whose + ' closest camp' }),
+      h('h1', { class: 'camp-name', tabindex: -1, 'data-focus': true, text: v.top.name }),
+      h('p', { class: 'match' }, pct(v.top.sim) + ' match', h('span', { text: ', ' + fit })),
+      h('p', { class: 'creed', text: v.top.creed }),
+      h('p', { class: 'about', text: v.top.about }),
+      h('dl', { class: 'facts' },
+        h('dt', { text: 'Critics say' }), h('dd', { text: v.top.critics }),
+        h('dt', { text: 'Who is here' }), h('dd', { text: v.top.near }),
+        v.rest.length > 0 && [h('dt', { text: 'Next closest' }), h('dd', { text: v.rest.map(r => r.name + ' (' + pct(r.sim) + ')').join(', ') })]));
+  } else {
+    const copy = {
+      thin: ['Not enough answers yet', 'A reading needs answers on at least five of the eight axes.'],
+      middle: ['The middle ground', 'On most axes the answers sit near the center. On this chart that is the island: conditional, case-by-case positions instead of one camp’s whole package.'],
+      torn: ['Pulled both ways', 'Statements from opposite sides both got agreement on most axes, so they cancel out. People who see force in both arguments land here, and no single camp matches that.'],
+      uncharted: ['Uncharted waters', 'These are clear views in a combination none of the eleven camps shares. The bars below show where they fall on each axis.']
+    }[v.kind];
+    head.push(
+      h('p', { class: 'kicker', text: whose + ' result' }),
+      h('h1', { class: 'camp-name', tabindex: -1, 'data-focus': true, text: copy[0] }),
+      h('p', { class: 'about', style: 'margin-top:20px', text: copy[1] }));
+  }
+  if (self && left > 0) head.push(h('div', { class: 'partial' },
+    h('span', { text: 'A rough reading from ' + n + ' of ' + ITEMS.length + ' statements. The rest will sharpen it.' }),
+    btn('Answer the remaining ' + left, 'small', () => { st.idx = firstOpen(); go('quiz'); })));
+  if (!self) head.push(h('div', { class: 'partial' },
+    h('span', { text: 'You are looking at the result ' + viewing.name + ' shared.' }),
+    canRead() ? btn('Back to your result', 'small', () => { st.viewing = null; go('result'); })
+      : btn(touched() ? 'Continue your own quiz' : 'Take the quiz yourself', 'small', () => { st.viewing = null; st.idx = firstOpen(); go('quiz'); })));
+
+  const ordered = sims.length ? sims : FACTIONS;
+  const camps = campPoints(sims.length ? sims : null);
+  const topCamp = v.kind === 'camp' ? camps[0] : null;
+  const havePos = pos.x !== null && pos.y !== null;
+  const quad = havePos ? quadrant(pos) : null;
+  const friendPts = fr.map(f => {
+    const c = compass(k => f.sc[k].score), t = rank(f.sc)[0];
+    return Object.assign(c, { name: f.name, camp: t && t.name });
+  }).filter(f => f.x !== null && f.y !== null);
+
+  const position = h('section', null,
+    h('h2', { text: self ? 'Where you sit' : 'Where ' + viewing.name + ' sits' }),
+    h('div', { class: 'position' },
+      h('figure', { class: 'chart' },
+        compassBox({
+          label: 'Chart of ' + (self ? 'your' : possessive(viewing.name)) + ' position among eleven reference camps',
+          camps: camps, friends: friendPts,
+          you: havePos && { x: pos.x, y: pos.y, name: youName, camp: topCamp && topCamp.name },
+          bearing: topCamp
+        }),
+        legend(havePos, youName, friendPts.length > 0)),
+      h('div', { class: 'reading' },
+        havePos ? [
+          h('p', { class: 'big', text: quad ? (self ? 'You are' : viewing.name + ' is') + ' in ' + quad[0] + ' waters: ' + quad[1] + '.'
+            : (self ? 'You are' : viewing.name + ' is') + ' on the island, the middle ground where neither direction dominates.' }),
+          h('p', { text: 'Position: ' + whereText(pos) + ', on a scale of 100 each way.' }),
+          topCamp && h('p', { text: 'The line points to ' + topCamp.name + ', the closest camp across all eight axes. It need not be the nearest mark on the chart, because the chart shows only five of them.' })
+        ] : h('p', { text: 'Answer statements on risk, pace, access, compute or wealth to get a position.' }),
+        h('p', { text: 'Left to right averages the access, compute and wealth axes. Bottom to top averages risk and pace. War, labor and architecture have their own bars below and do not move the mark.' }))));
+
+  const axes = h('section', null,
+    h('h2', { text: self ? 'Your eight axes' : possessive(viewing.name) + ' eight axes' }),
+    KEYS.map(k => axisBlock(k, sc[k], self, resp, fr)));
+
+  const ranked = sims.length > 0 && h('section', null,
+    h('h2', { text: 'All eleven camps, closest first' }),
+    h('p', { class: 'hint', text: '100 means the same direction on every axis, 0 means unrelated, and a negative number means the opposite direction.' }),
+    h('ol', { class: 'ranked' }, ordered.map(r => tip(h('li', { tabindex: 0 }, h('span', { text: r.name }), h('span', { text: num(r.sim * 100) })), r.name, [r.creed]))));
+
+  return h('main', null, h('div', { class: 'result-head' }, head), position, axes, self && shareSection(sc, fr), ranked, methodSection());
+}
+
+function shareSection(sc, fr) {
+  const code = () => encodeCode(st.resp, st.name);
+  const link = !framed && /^https?:$/.test(location.protocol) ? () => location.href.split('#')[0] + '#r-' + code() : null;
+  const out = h('input', { type: 'text', id: 'your-code', readonly: true, value: code(), 'aria-describedby': 'code-hint', onfocus: e => e.target.select() });
+  const err = h('p', { class: 'err', role: 'alert' });
+  function copy(text, b, label) {
+    const done = ok => { b.textContent = ok ? 'Copied' : 'Select the code and copy it'; setTimeout(() => { b.textContent = label; }, 2200); };
+    const fallback = () => { out.focus(); out.select(); let ok = false; try { ok = text === out.value && document.execCommand('copy'); } catch (e) { ok = false; } done(ok); };
+    try { navigator.clipboard.writeText(text).then(() => done(true), fallback); } catch (e) { fallback(); }
+  }
+  const copyBtn = btn('Copy code', 'small', () => copy(code(), copyBtn, 'Copy code'));
+  const linkBtn = link && btn('Copy link', 'small', () => copy(link(), linkBtn, 'Copy link'));
+  const name = h('input', { type: 'text', id: 'your-name', maxlength: 20, value: st.name, autocomplete: 'off',
+    oninput: e => { st.name = cleanName(e.target.value); out.value = code(); save(); } });
+  const theirs = h('input', { type: 'text', id: 'friend-code', autocomplete: 'off', spellcheck: 'false', placeholder: CODE_PREFIX + '-…' });
+  const addIt = e => {
+    if (e) e.preventDefault();
+    if (!theirs.value.trim()) { err.textContent = 'Paste a friend’s code first.'; return; }
+    const msg = addFriend(theirs.value);
+    if (msg) { err.textContent = msg; return; }
+    render(); const el = document.getElementById('compare'); if (el) el.scrollIntoView({ block: 'start' });
+  };
+  const rows = [];
+  KEYS.forEach(k => rows.push([AXES[k].short + ': ' + AXES[k].low[0] + ' (−) to ' + AXES[k].high[0] + ' (+)', sc[k].score, fr.map(f => f.sc[k].score)]));
+  const mine = compass(k => sc[k].score), theirPos = fr.map(f => compass(k => f.sc[k].score));
+  rows.push(['Chart, left to right: distributed (−) to concentrated (+)', mine.x, theirPos.map(c => c.x)]);
+  rows.push(['Chart, bottom to top: speed (−) to caution (+)', mine.y, theirPos.map(c => c.y)]);
+  const cell = v => h('td', { text: v === null ? '–' : num(v) });
+
+  return h('section', { id: 'compare' },
+    h('h2', { text: 'Compare with friends' }),
+    h('div', { class: 'share' },
+      h('div', null,
+        h('div', { class: 'field' }, h('label', { for: 'your-name', text: 'Your name, to show beside your mark (optional)' }), name),
+        h('div', { class: 'field' }, h('label', { for: 'your-code', text: 'Your code' }),
+          out, h('div', { class: 'row' }, copyBtn, linkBtn),
+          h('p', { class: 'hint', id: 'code-hint', text: 'Send this to a friend. It holds your answers to all 48 statements, so share it with people you are happy to show them to.' }))),
+      h('form', { onsubmit: addIt },
+        h('div', { class: 'field' }, h('label', { for: 'friend-code', text: 'A friend’s code' }),
+          h('div', { class: 'row' }, theirs, h('button', { class: 'btn small', type: 'submit', text: 'Add to the chart' })), err),
+        fr.length === 0 && h('p', { class: 'hint', text: 'Paste a code and your friend appears on the chart and on every axis above, with how closely the two of you line up.' }))),
+    fr.length > 0 && h('ul', { class: 'friends' }, fr.map(f => {
+      const ag = agreement(sc, f.sc), both = KEYS.filter(k => sc[k].score !== null && f.sc[k].score !== null);
+      const gap = k => Math.abs(sc[k].score - f.sc[k].score);
+      const far = both.slice().sort((a, b) => gap(b) - gap(a))[0], near = both.slice().sort((a, b) => gap(a) - gap(b))[0];
+      const t = rank(f.sc)[0];
+      return h('li', null,
+        h('span', { class: 'who', text: f.name }),
+        h('span', { class: 'how', text: (ag === null ? 'No axes in common yet.' : pct(ag) + ' aligned with you. Closest on ' + AXES[near].short.toLowerCase() + ', furthest apart on ' + AXES[far].short.toLowerCase() + '.') + (t ? ' Closest camp: ' + t.name + '.' : '') }),
+        h('span', { class: 'row' },
+          btn('See full result', 'small', () => { st.viewing = f.i; go('result'); }),
+          btn('Remove', 'quiet', () => { st.friends.splice(f.i, 1); render(); })));
+    })),
+    h('details', null, h('summary', { text: 'Scores as a table' }),
+      h('div', { class: 'tbl' }, h('table', null,
+        h('thead', null, h('tr', null, h('th', { scope: 'col', text: 'Axis' }), h('th', { scope: 'col', text: 'You' }), fr.map(f => h('th', { scope: 'col', text: f.name })))),
+        h('tbody', null, rows.map(r => h('tr', null, h('td', { text: r[0] }), cell(r[1]), r[2].map(cell))))))));
+}
+
+function methodSection() {
+  return h('section', { class: 'method' },
+    h('h2', { text: 'How the scoring works' }),
+    h('p', { text: 'Each axis has six statements, three written from each of its two poles. Your score is how much more you agree with one side than the other, from 100 one way to 100 the other. Statements you skip are left out; they are not counted as neutral.' }),
+    h('p', { text: 'Agreeing with both sides gives a score near zero and a “pulled both ways” flag, so a moderate and someone who holds both views strongly are told apart. Scores within 25 of the center count as the middle ground, which each axis names.' }),
+    h('p', { text: 'Each camp is a profile on all eight axes. Your closest camp is the one whose profile points in the direction most like yours, whether your views are mild or strong. If nothing reaches 45 percent, no camp is named.' }),
+    h('details', null, h('summary', { text: 'The eleven camp profiles' }),
+      h('div', { class: 'tbl' }, h('table', null,
+        h('thead', null, h('tr', null, h('th', { scope: 'col', text: 'Camp' }), KEYS.map(k => h('th', { scope: 'col', text: AXES[k].short })))),
+        h('tbody', null, FACTIONS.map(f => h('tr', null, h('td', { text: f.name }), f.d.map(v => h('td', { text: num(v) })))))))),
+    h('p', { style: 'margin-top:14px', text: 'The camps are simplified reference points, and the public figures named beside some of them are rough signposts based on positions they have argued in public. The quiz does not measure what any of them actually thinks, and every camp has serious people in it.' }));
+}
+
+function footer() {
+  return h('footer', null,
+    h('p', null, 'Eight axes, 48 statements, eleven reference camps. The starting point was Kristin Houser’s ',
+      h('a', { href: 'https://bigthink.com/?p=597774', target: '_blank', rel: 'noopener', text: '“10 perspectives that divide the AI world”' }),
+      ' in Big Think, reworked from ten tribes into eight independent axes.'),
+    h('p', { text: 'Nothing you enter is sent anywhere. Answers are kept in this browser, and a code only travels when you send it yourself.' }));
+}
+
+function render(focus) {
+  afterRender = []; mounted = [];
+  if (st.view === 'result' && st.viewing == null && !canRead()) st.view = 'intro';
+  if (st.viewing != null && !st.friends[st.viewing]) st.viewing = null;
+  const view = st.view === 'quiz' ? quizView() : st.view === 'result' ? resultView() : introView();
+  $app.replaceChildren(topBar(), view, footer());
+  afterRender.forEach(f => f());
+  save();
+  if (focus) { const el = $app.querySelector('[data-focus]'); if (el) el.focus({ preventScroll: true }); }
+}
+
+// A link can carry a friend's result as #r-CODE.
+function readHash() {
+  const m = /^#r-(.+)$/i.exec(location.hash || '');
+  if (!m) return;
+  const d = decodeCode(m[1]);
+  if (!d) return;
+  if (answered() && bodyOf(encodeCode(d.resp, '')) === bodyOf(encodeCode(st.resp, ''))) return;
+  if (addFriend(m[1])) return;
+  const who = d.name || 'A friend';
+  if (canRead()) { st.view = 'result'; st.viewing = null; }
+  else { st.view = 'intro'; st.note = who + ' sent you their result. Take the quiz and you will both be on the chart.'; }
+}
+window.addEventListener('hashchange', () => { readHash(); render(); });
+
+function start(data) {
+  load();
+  Object.assign(st, sanitize(data));
+  readHash();
+  render();
+}
+const hot = window.claude && window.claude.hot;
+if (hot && hot.snapshot) hot.snapshot(snapshot);
+if (hot && hot.ready) hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
+</body>
+</html>
