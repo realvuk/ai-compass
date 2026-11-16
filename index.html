@@ -89,6 +89,10 @@ a { color: inherit; text-underline-offset: 3px; }
 .lede { margin-top: 22px; max-width: 30em; font-size: 20px; line-height: 1.45; color: var(--ink-2); }
 .hero .row { margin-top: 28px; }
 .fine { margin-top: 14px; font: 500 15px/1.4 var(--display); font-stretch: 88%; color: var(--muted); max-width: 34em; }
+.source-credit { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--rule);
+  max-width: 35em; font: 500 14.5px/1.5 var(--display); font-stretch: 88%; color: var(--muted); }
+.source-credit a { color: var(--ink-2); text-decoration-color: var(--muted); }
+.source-credit a:hover { color: var(--accent); text-decoration-color: var(--accent); }
 .notice { margin-top: 24px; padding: 14px 16px; border-left: 4px solid var(--friend); background: var(--surface);
   font: 500 16px/1.4 var(--display); font-stretch: 88%; }
 .chart figure, figure.chart { margin: 0; }
@@ -948,6 +952,9 @@ function introView() {
         st.note && h('p', { class: 'notice', role: 'status', text: st.note }),
         h('div', { class: 'row' }, cta),
         h('p', { class: 'fine', text: some ? 'Your answers are saved in this browser only.' : 'About 8 minutes. After 16 statements you can stop for a rough reading. Your answers stay in this browser.' }),
+        h('p', { class: 'source-credit' }, 'Inspired by Kristin Houser’s ',
+          h('a', { href: 'https://bigthinkmedia.substack.com/p/10-perspectives-that-divide-the-ai', target: '_blank', rel: 'noopener noreferrer', text: '“10 perspectives that divide the AI world”' }),
+          ' for Big Think. Reimagined here as eight independent dimensions.'),
         fr.length > 0 && !canRead() && h('div', { class: 'row' }, fr.map(f => btn('See ' + possessive(f.name) + ' result', 'small', () => { st.viewing = f.i; go('result'); })))),
       chart),
     h('section', null,
@@ -1209,7 +1216,7 @@ function methodSection() {
 function footer() {
   return h('footer', null,
     h('p', null, 'Eight axes, 48 statements, eleven reference camps. The starting point was Kristin Houser’s ',
-      h('a', { href: 'https://bigthink.com/?p=597774', target: '_blank', rel: 'noopener', text: '“10 perspectives that divide the AI world”' }),
+      h('a', { href: 'https://bigthinkmedia.substack.com/p/10-perspectives-that-divide-the-ai', target: '_blank', rel: 'noopener noreferrer', text: '“10 perspectives that divide the AI world”' }),
       ' in Big Think, reworked from ten tribes into eight independent axes.'),
     h('p', { text: 'Nothing you enter is sent anywhere. Answers are kept in this browser, and a code only travels when you send it yourself.' }));
 }
