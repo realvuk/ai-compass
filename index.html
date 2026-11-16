@@ -919,7 +919,7 @@ function topBar() {
   if (st.view === 'quiz') right.push(h('span', { class: 'saved', text: 'Your answers save as you go' }), btn('Exit', 'quiet', () => go('intro')));
   if (st.view === 'result') right.push(btn('Home', 'quiet', () => { st.viewing = null; go('intro'); }));
   return h('header', { class: 'top' },
-    h('button', { class: 'brand', type: 'button', title: 'Back to the start', onclick: () => { st.viewing = null; go('intro'); } }, rose, h('span', { text: 'AI Compass' })),
+    h('button', { class: 'brand', type: 'button', title: 'Back to the start', onclick: () => { st.viewing = null; go('intro'); } }, rose, h('span', { text: 'AI Compass 0.1' })),
     h('div', { class: 'top-right' }, right));
 }
 
