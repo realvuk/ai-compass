@@ -4,9 +4,9 @@
 
 > AI isn't one debate. It's eight.
 
-[![AI Compass: AI isn't one debate. It's eight. Explore your AI worldview.](assets/og-image.png)](https://realvuk.github.io/ai-compass/)
+[![AI Compass: AI isn't one debate. It's eight. Explore your AI worldview.](assets/og-image.png)](https://compass.vukdinic.com/)
 
-**[Open the live app →](https://realvuk.github.io/ai-compass/)** · [Project page](https://vukdinic.com/projects/ai-compass/) · [See an example result](https://realvuk.github.io/ai-compass/#demo)
+**[Open the live app →](https://compass.vukdinic.com/)** · [Project page](https://vukdinic.com/projects/ai-compass/) · [See an example result](https://compass.vukdinic.com/#demo)
 
 ## The problem
 
@@ -77,7 +77,7 @@ Statements come in rounds of eight, one per dimension, alternating between poles
 
 **Summary.** Fixed rules over the scores, in `summarize()` and `summaryLines()` in `js/core.js`. No language model is involved.
 
-The same explanation, for visitors, is on the app's [About page](https://realvuk.github.io/ai-compass/#about). Details for developers are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The same explanation, for visitors, is on the app's [About page](https://compass.vukdinic.com/#about). Details for developers are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Architecture
 

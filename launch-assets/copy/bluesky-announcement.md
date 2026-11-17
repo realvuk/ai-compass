@@ -12,7 +12,7 @@ I built AI Compass, a short quiz that asks where you stand on risk, pace, access
 
 No account. Nothing leaves your browser.
 
-https://realvuk.github.io/ai-compass/
+https://compass.vukdinic.com/
 
 **Post 2 (reply)**
 

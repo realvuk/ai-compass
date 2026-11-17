@@ -10,7 +10,7 @@ Dear colleagues,
 
 I have built a small public tool that may interest people working on attitudes to technology, and I would be grateful for critical feedback.
 
-AI Compass (https://realvuk.github.io/ai-compass/) is an interactive questionnaire that treats positions on artificial intelligence as multidimensional. Instead of one optimism-to-pessimism scale, it asks about eight questions: existential risk, pace of development, access to models, military use, labor, where compute sits, technical architecture, and the distribution of wealth. Each has six Likert statements, balanced three and three between poles. Respondents see a position on every dimension and can compare with another person.
+AI Compass (https://compass.vukdinic.com/) is an interactive questionnaire that treats positions on artificial intelligence as multidimensional. Instead of one optimism-to-pessimism scale, it asks about eight questions: existential risk, pace of development, access to models, military use, labor, where compute sits, technical architecture, and the distribution of wealth. Each has six Likert statements, balanced three and three between poles. Respondents see a position on every dimension and can compare with another person.
 
 I want to be clear about its status. It is an exploratory educational tool. The dimensions and items come from my own reading of the public debate, starting from Kristin Houser's article "10 perspectives that divide the AI world" (Big Think). The items have not been piloted, and no reliability or validity analysis has been done. The eleven "reference camps" it shows are illustrative profiles, not empirically derived clusters. The app says all of this to its users.
 

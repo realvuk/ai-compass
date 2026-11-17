@@ -20,7 +20,7 @@ A caveat I care about as a social scientist: this is an exploratory educational 
 
 The idea grew out of Kristin Houser's Big Think piece "10 perspectives that divide the AI world".
 
-Try it: https://realvuk.github.io/ai-compass/
+Try it: https://compass.vukdinic.com/
 About the project: https://vukdinic.com/projects/ai-compass/
 
 Where did you land, and which result surprised you?

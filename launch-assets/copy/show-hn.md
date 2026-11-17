@@ -6,7 +6,7 @@ Show HN: AI Compass – a quiz that splits the AI debate into eight questions
 
 **URL**
 
-https://realvuk.github.io/ai-compass/
+https://compass.vukdinic.com/
 
 **Text**
 
@@ -18,7 +18,7 @@ Technical notes: plain HTML, CSS and JavaScript, no framework, no build step, no
 
 What it is not: a validated instrument. I wrote the statements and the camps myself and have run no reliability or validity studies. I would value criticism of the item wording and of whether these eight dimensions are the right ones.
 
-There is an example result if you want to look before answering anything: https://realvuk.github.io/ai-compass/#demo
+There is an example result if you want to look before answering anything: https://compass.vukdinic.com/#demo
 
 Source: https://github.com/realvuk/ai-compass
 
