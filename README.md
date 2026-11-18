@@ -167,7 +167,3 @@ Vuk Dinić is a computational sociologist and data scientist working at the inte
 - [Raise a methodological concern](https://github.com/realvuk/ai-compass/issues/new?template=methodology.yml)
 
 You never need to share your answers or your result code to give feedback. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
-
-## License
-
-This repository does not contain a license file yet. Until the author adds one, the code and content are not licensed for reuse: you may read the source and use the app, but copying, modifying or redistributing it needs the author's permission. If you would like to reuse something, please [open an issue](https://github.com/realvuk/ai-compass/issues/new).
